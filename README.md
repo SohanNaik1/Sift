@@ -13,7 +13,7 @@ A high-performance, keyboard-driven file triage TUI. Built for extreme efficienc
 
 Launch Sift by passing your target directory via the command line flag.
 
-`sift triage -dir=~/Downloads`
+`./sift triage -dir=~/Downloads`
 
 ### Global Keybindings
 * **[1-9]**: Quick move file to pre-configured paths.
