@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Sift</title>
+    <link rel="stylesheet" href="./src/style.css"/>
+</head>
+<body>
+    <!-- Top Action Bar -->
+    <header class="header">
+        <div class="header-left">
+            <span style="font-weight:bold; font-size: 1.1rem; padding-right: 8px;">Sift</span>
+            <div class="divider"></div>
+            <button id="btn-open" class="action-btn" title="Open selected file">
+                Open
+            </button>
+            <div id="mouse-quick-targets" style="display:flex; gap: 4px;">
+                <!-- Populated dynamically -->
+            </div>
+            <button id="btn-custom-move" class="action-btn" title="Move to custom directory (C)">
+                Move To...
+            </button>
+            <button id="btn-trash" class="action-btn danger" title="Trash selected file">
+                Trash
+            </button>
+        </div>
+        <div class="header-right">
+            <button id="btn-quit" class="action-btn danger">Quit</button>
+        </div>
+    </header>
+
+    <div id="app">
+        <!-- Sidebar: File List -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="path-display" id="current-path">~</div>
+            </div>
+            <div class="file-list-container">
+                <ul id="file-list" class="file-list">
+                    <!-- Populated via TS -->
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content: Preview Pane -->
+        <main class="preview-pane">
+            <div id="preview-header" class="preview-header">
+                <h2 id="preview-title">Select a file</h2>
+                <div class="file-meta" id="file-meta"></div>
+            </div>
+            
+            <div id="preview-content" class="preview-content">
+                <div class="empty-state">
+                    <p>No preview available</p>
+                </div>
+            </div>
+
+            <!-- Controls overlay (Keyboard Hints) -->
+            <div class="controls-overlay">
+                <kbd>↑/↓</kbd> Navigate &nbsp;
+                <kbd>Enter</kbd> Open &nbsp;
+                <kbd>1-9</kbd> Move &nbsp;
+                <kbd>R</kbd> Trash
+            </div>
+        </main>
+    </div>
+    
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

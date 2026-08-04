@@ -1,0 +1,21 @@
+# Binaries and build artifacts
+build/bin/
+*.exe
+*.app
+*.dmg
+sift
+
+# Node modules and frontend build
+frontend/node_modules/
+frontend/dist/
+
+# OS Specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+
+# Local configuration created at runtime
+targets.json
