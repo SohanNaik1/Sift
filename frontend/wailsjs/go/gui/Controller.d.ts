@@ -7,11 +7,17 @@ export function GetFilePreview(arg1:string):Promise<gui.PreviewData>;
 
 export function GetQuickTargets():Promise<Record<string, string>>;
 
+export function GetTrashPath():Promise<string>;
+
 export function ListFiles(arg1:string):Promise<Array<gui.FileEntry>>;
 
 export function MoveFile(arg1:string,arg2:string):Promise<void>;
 
+export function OpenNative(arg1:string):Promise<void>;
+
 export function PickDirectory():Promise<string>;
+
+export function PinTarget(arg1:string):Promise<Record<string, string>>;
 
 export function Quit():Promise<void>;
 

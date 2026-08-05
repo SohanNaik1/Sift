@@ -9,12 +9,19 @@ Sift is distributed as a unified binary:
 
 ## Installation
 
-Installing Sift is now easier than ever.
+Sift is a native, cross-platform application that runs flawlessly on Linux, Windows, and macOS.
 
-### 1. System Requirements
-Sift's GUI requires a few standard developer tools:
+### 1. Pre-Built Releases (Recommended)
+You do not need to clone this repository or install dependencies if you just want to use the app.
+1. Navigate to the **Releases** tab on GitHub.
+2. Download the latest binary for your operating system (e.g., `sift-windows-amd64.exe`, `sift-linux-amd64`, or `sift-darwin-arm64`).
+3. Run the application!
+
+### 2. Build From Source
+If you prefer to compile from source, Sift requires a few standard developer tools:
 - **Go 1.20+**
 - **Node.js & npm** 
+- **Wails CLI** (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
 
 **Linux Only:** You must install WebKitGTK dev packages to compile the windowing environment.
 - **Ubuntu/Debian**: `sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config`
@@ -24,7 +31,6 @@ Sift's GUI requires a few standard developer tools:
 
 *(Note: MacOS and Windows do not require extra graphical dependencies.)*
 
-### 2. Build & Install
 Run the included installation script to handle Wails bindings, frontend building, and final compilation automatically:
 
 ```bash
@@ -46,13 +52,15 @@ sift
 ```
 * **[Arrow Keys]**: Navigate through the file list.
 * **[1-9]**: Quick move the selected file to pre-configured paths.
-* **[R]**: Move the selected file to the internal trash bin.
-* **[Enter]**: Open directory.
+* **[R]**: Move the selected file to the internal Sift Trash.
+* **[Enter]**: Open directory or file.
+* **[?]**: Open Hotkeys & Quick Paths modal.
 
 ### Terminal TUI Mode
-Launch Sift by passing your target directory via the command line flag.
+The Terminal UI (TUI) is fully intact and allows you to rapidly triage files via SSH or entirely from the terminal. 
+To access it, you **must** pass the `triage` command along with a target directory:
 ```bash
-sift triage -dir=~/Downloads
+sift triage -dir=/path/to/folder
 ```
 
 **Global TUI Keybindings:**

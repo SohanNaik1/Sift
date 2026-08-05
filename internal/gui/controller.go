@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +47,8 @@ type FileEntry struct {
 	Perms       string  `json:"perms"`
 	PreviewType string  `json:"previewType"`
 	Mime        string  `json:"mime"`
+	Ext         string  `json:"ext"`
+	IsHidden    bool    `json:"isHidden"`
 }
 
 type PreviewData struct {
@@ -85,8 +89,17 @@ func (c *Controller) ListFiles(dir string) ([]FileEntry, error) {
 		var previewType = "none"
 
 		if !e.IsDir() {
-			mimeBytes, _ := exec.Command("file", "-b", "--mime-type", fullPath).Output()
-			mimeStr = strings.TrimSpace(string(mimeBytes))
+			ext := strings.ToLower(filepath.Ext(fullPath))
+			mimeStr = mime.TypeByExtension(ext)
+			if mimeStr == "" {
+				f, err := os.Open(fullPath)
+				if err == nil {
+					buffer := make([]byte, 512)
+					n, _ := f.Read(buffer)
+					mimeStr = http.DetectContentType(buffer[:n])
+					f.Close()
+				}
+			}
 
 			if strings.HasPrefix(mimeStr, "image/") {
 				previewType = "image"
@@ -112,6 +125,8 @@ func (c *Controller) ListFiles(dir string) ([]FileEntry, error) {
 			Perms:       info.Mode().String(),
 			PreviewType: previewType,
 			Mime:        mimeStr,
+			Ext:         filepath.Ext(e.Name()),
+			IsHidden:    strings.HasPrefix(e.Name(), "."),
 		})
 	}
 	return results, nil
@@ -211,9 +226,46 @@ func (c *Controller) GetQuickTargets() map[string]string {
 	return targets
 }
 
-func (c *Controller) TrashFile(path string) error {
+func (c *Controller) PinTarget(path string) map[string]string {
+	targets := c.GetQuickTargets()
+	
+	// Check if already pinned, if so, unpin it
+	for k, v := range targets {
+		if v == path {
+			delete(targets, k)
+			data, err := json.MarshalIndent(targets, "", "  ")
+			if err == nil {
+				os.WriteFile("targets.json", data, 0644)
+			}
+			return targets
+		}
+	}
+
+	// Find first available slot 1-9
+	for i := 1; i <= 9; i++ {
+		key := fmt.Sprintf("%d", i)
+		if _, exists := targets[key]; !exists {
+			targets[key] = path
+			break
+		}
+	}
+	
+	// Save
+	data, err := json.MarshalIndent(targets, "", "  ")
+	if err == nil {
+		os.WriteFile("targets.json", data, 0644)
+	}
+	
+	return targets
+}
+
+func (c *Controller) GetTrashPath() string {
 	homeDir, _ := os.UserHomeDir()
-	trashDir := filepath.Join(homeDir, ".local", "share", "sift", "trash")
+	return filepath.Join(homeDir, ".local", "share", "sift", "trash")
+}
+
+func (c *Controller) TrashFile(path string) error {
+	trashDir := c.GetTrashPath()
 	os.MkdirAll(trashDir, os.ModePerm)
 
 	dest := filepath.Join(trashDir, fmt.Sprintf("%d_%s", time.Now().Unix(), filepath.Base(path)))
@@ -241,4 +293,18 @@ func (c *Controller) PickDirectory() string {
 		return ""
 	}
 	return dir
+}
+
+func (c *Controller) OpenNative(path string) error {
+	// Simple fallback to xdg-open on Linux (or open on Mac, start on Windows)
+	var cmd *exec.Cmd
+	switch os.Getenv("GOOS") {
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	default:
+		cmd = exec.Command("xdg-open", path)
+	}
+	return cmd.Start()
 }

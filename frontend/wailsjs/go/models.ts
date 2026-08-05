@@ -9,6 +9,8 @@ export namespace gui {
 	    perms: string;
 	    previewType: string;
 	    mime: string;
+	    ext: string;
+	    isHidden: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileEntry(source);
@@ -24,6 +26,8 @@ export namespace gui {
 	        this.perms = source["perms"];
 	        this.previewType = source["previewType"];
 	        this.mime = source["mime"];
+	        this.ext = source["ext"];
+	        this.isHidden = source["isHidden"];
 	    }
 	}
 	export class PreviewData {

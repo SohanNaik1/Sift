@@ -10,6 +10,10 @@ export function GetQuickTargets() {
   return window['go']['gui']['Controller']['GetQuickTargets']();
 }
 
+export function GetTrashPath() {
+  return window['go']['gui']['Controller']['GetTrashPath']();
+}
+
 export function ListFiles(arg1) {
   return window['go']['gui']['Controller']['ListFiles'](arg1);
 }
@@ -18,8 +22,16 @@ export function MoveFile(arg1, arg2) {
   return window['go']['gui']['Controller']['MoveFile'](arg1, arg2);
 }
 
+export function OpenNative(arg1) {
+  return window['go']['gui']['Controller']['OpenNative'](arg1);
+}
+
 export function PickDirectory() {
   return window['go']['gui']['Controller']['PickDirectory']();
+}
+
+export function PinTarget(arg1) {
+  return window['go']['gui']['Controller']['PinTarget'](arg1);
 }
 
 export function Quit() {

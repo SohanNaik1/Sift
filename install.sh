@@ -43,9 +43,16 @@ else
 fi
 
 echo "[Success] Build complete!"
+
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+cp build/bin/sift "$BIN_DIR/sift"
+
 echo ""
-echo "The binary is located at: ./build/bin/sift"
+echo "=========================================================="
+echo " Sift is now installed to $BIN_DIR/sift"
 echo ""
-echo "To install system-wide, run:"
-echo "sudo cp build/bin/sift /usr/local/bin/"
-echo "=========================================="
+echo " You can now run Sift from anywhere in your terminal!"
+echo "   GUI Mode: sift"
+echo "   TUI Mode: sift triage -dir=/path/to/folder"
+echo "=========================================================="

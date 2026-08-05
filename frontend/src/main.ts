@@ -1,6 +1,6 @@
 import './style.css';
 // @ts-ignore
-import {ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory} from '../wailsjs/go/gui/Controller';
+import {ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory, OpenNative, GetTrashPath, PinTarget} from '../wailsjs/go/gui/Controller';
 
 interface FileEntry {
     name: string;
@@ -11,12 +11,16 @@ interface FileEntry {
     perms: string;
     previewType: string;
     mime: string;
+    ext: string;
+    isHidden: boolean;
 }
 
 let currentPath = '~';
+let allFiles: FileEntry[] = [];
 let files: FileEntry[] = [];
 let selectedIndex = 0;
 let quickTargets: Record<string, string> = {};
+let previewDebounceTimer: number | null = null;
 
 const fileListEl = document.getElementById('file-list') as HTMLUListElement;
 const currentPathEl = document.getElementById('current-path') as HTMLDivElement;
@@ -24,11 +28,16 @@ const previewTitleEl = document.getElementById('preview-title') as HTMLHeadingEl
 const fileMetaEl = document.getElementById('file-meta') as HTMLDivElement;
 const previewContentEl = document.getElementById('preview-content') as HTMLDivElement;
 
+const searchBar = document.getElementById('search-bar') as HTMLInputElement;
 const btnOpen = document.getElementById('btn-open') as HTMLButtonElement;
 const btnTrash = document.getElementById('btn-trash') as HTMLButtonElement;
-const btnCustomMove = document.getElementById('btn-custom-move') as HTMLButtonElement;
+const btnTrashPortal = document.getElementById('btn-trash-portal') as HTMLButtonElement;
+const btnHotkeys = document.getElementById('btn-hotkeys') as HTMLButtonElement;
+const btnHome = document.getElementById('btn-home') as HTMLButtonElement;
 const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
-const mouseTargets = document.getElementById('mouse-quick-targets') as HTMLDivElement;
+const mouseTargets = document.getElementById('quick-targets-modal-group') as HTMLDivElement;
+const modal = document.getElementById('hotkey-modal') as HTMLDivElement;
+const btnCloseModal = document.getElementById('btn-close-modal') as HTMLButtonElement;
 
 async function init() {
     quickTargets = await GetQuickTargets();
@@ -36,53 +45,120 @@ async function init() {
     setupMouseControls();
     await loadDirectory(currentPath);
     setupKeyboardListeners();
+    setupSearch();
 }
 
 function renderQuickTargets() {
     mouseTargets.innerHTML = '';
     for (const [key, path] of Object.entries(quickTargets)) {
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'inline-flex';
+        wrapper.style.margin = '4px';
+        
         const btn = document.createElement('button');
         btn.className = 'action-btn';
+        btn.style.borderRadius = 'var(--radius-sm) 0 0 var(--radius-sm)';
         btn.innerHTML = `${key}: ${path.split('/').pop() || path}`;
         btn.title = `Move to ${path}`;
-        btn.onclick = () => handleMove(key);
-        mouseTargets.appendChild(btn);
+        btn.onclick = () => {
+            modal.style.display = 'none';
+            handleMove(key);
+        };
+        
+        const unpinBtn = document.createElement('button');
+        unpinBtn.className = 'action-btn danger';
+        unpinBtn.style.borderRadius = '0 var(--radius-sm) var(--radius-sm) 0';
+        unpinBtn.style.borderLeft = 'none';
+        unpinBtn.style.padding = '4px 8px';
+        unpinBtn.innerHTML = '&times;';
+        unpinBtn.title = `Unpin ${path}`;
+        unpinBtn.onclick = async (e) => {
+            e.stopPropagation();
+            quickTargets = await PinTarget(path);
+            renderQuickTargets();
+            renderFileList();
+            updateSelection(true);
+        };
+
+        wrapper.appendChild(btn);
+        wrapper.appendChild(unpinBtn);
+        mouseTargets.appendChild(wrapper);
     }
 }
 
 function setupMouseControls() {
     btnOpen.onclick = handleAction;
     btnTrash.onclick = handleTrash;
-    btnCustomMove.onclick = handlePickDirectory;
+    btnTrashPortal.onclick = async () => {
+        const trashPath = await GetTrashPath();
+        searchBar.value = '';
+        await loadDirectory(trashPath);
+    };
+    btnHome.onclick = async () => {
+        searchBar.value = '';
+        await loadDirectory('~');
+    };
+    btnHotkeys.onclick = () => {
+        modal.style.display = 'flex';
+    };
+    btnCloseModal.onclick = () => {
+        modal.style.display = 'none';
+    };
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    };
     btnQuit.onclick = async () => {
         await Quit();
     };
 }
 
+function setupSearch() {
+    searchBar.addEventListener('input', async () => {
+        const query = searchBar.value;
+        if (query.startsWith('/') || query.startsWith('~')) {
+            if (query.endsWith('/')) {
+                await loadDirectory(query);
+            }
+            return;
+        }
+
+        if (query.trim() === '') {
+            files = [...allFiles];
+        } else {
+            const lowerQuery = query.toLowerCase();
+            files = allFiles.filter(f => f.name.toLowerCase().includes(lowerQuery));
+        }
+        selectedIndex = 0;
+        renderFileList();
+        updateSelection(true);
+    });
+}
+
 async function loadDirectory(path: string, preserveIndex: boolean = false) {
     try {
         const oldIndex = selectedIndex;
-        files = await ListFiles(path);
+        allFiles = await ListFiles(path);
+        files = [...allFiles];
         
-        if (files.length > 0) {
-            if (files[0].name === '../' && files.length > 1) {
-                currentPath = files[1].path.substring(0, files[1].path.lastIndexOf('/'));
-            } else if (files.length > 0 && files[0].name !== '../') {
-                currentPath = files[0].path.substring(0, files[0].path.lastIndexOf('/'));
+        if (allFiles.length > 0) {
+            if (allFiles[0].name === '../' && allFiles.length > 1) {
+                currentPath = allFiles[1].path.substring(0, allFiles[1].path.lastIndexOf('/'));
+            } else if (allFiles.length > 0 && allFiles[0].name !== '../') {
+                currentPath = allFiles[0].path.substring(0, allFiles[0].path.lastIndexOf('/'));
             } else {
                 currentPath = path;
             }
             currentPathEl.textContent = currentPath;
         }
 
-        if (preserveIndex) {
+        if (preserveIndex && searchBar.value === '') {
             selectedIndex = Math.min(oldIndex, Math.max(0, files.length - 1));
         } else {
             selectedIndex = 0;
         }
         
         renderFileList();
-        updateSelection(true); // render preview as well
+        updateSelection(true); 
     } catch (e) {
         console.error(e);
         previewContentEl.innerHTML = `<div class="empty-state"><p>Error loading directory</p></div>`;
@@ -96,20 +172,56 @@ function renderFileList() {
         li.className = `file-item`;
         li.id = `item-${index}`;
         
-        let iconClass = 'icon-none';
-        if (file.isDir) iconClass = 'icon-dir';
-        else if (file.previewType === 'image') iconClass = 'icon-image';
-        else if (file.previewType === 'video') iconClass = 'icon-video';
-        else if (file.previewType === 'pdf') iconClass = 'icon-pdf';
-        else if (file.previewType === 'text') iconClass = 'icon-text';
-        else if (file.previewType === 'document') iconClass = 'icon-doc';
+        if (file.name === '../') {
+            li.innerHTML = `
+                <div class="file-info">
+                    <div class="file-name">
+                        <span class="badge badge-dir">&larr;</span>
+                        <span style="font-weight: 600; color: var(--accent);">Parent Directory</span>
+                    </div>
+                    <span class="file-meta-small">Go Back</span>
+                </div>
+            `;
+        } else {
+            let badgeClass = 'badge-none';
+            let badgeText = '---';
+            if (file.isDir) { badgeClass = 'badge-dir'; badgeText = 'DIR'; }
+            else if (file.previewType === 'image') { badgeClass = 'badge-img'; badgeText = 'IMG'; }
+            else if (file.previewType === 'video') { badgeClass = 'badge-vid'; badgeText = 'VID'; }
+            else if (file.previewType === 'pdf') { badgeClass = 'badge-doc'; badgeText = 'PDF'; }
+            else if (file.previewType === 'text') { badgeClass = 'badge-txt'; badgeText = 'TXT'; }
+            else if (file.previewType === 'document') { badgeClass = 'badge-doc'; badgeText = 'DOC'; }
 
-        li.innerHTML = `
-            <div class="file-info">
-                <span class="file-name ${iconClass}">${file.name}</span>
-                <span class="file-meta-small">${file.isDir ? 'Folder' : file.sizeMB.toFixed(2) + ' MB'} | ${file.modTime}</span>
-            </div>
-        `;
+            const isPinned = Object.values(quickTargets).includes(file.path);
+            let pinBtn = '';
+            if (file.isDir) {
+                const pinStyle = isPinned ? 'display: inline-block; background-color: var(--accent); color: #fff;' : '';
+                pinBtn = `<button class="action-btn pin-btn" style="padding: 2px 6px; font-size: 0.7rem; margin-left: auto; ${pinStyle}" title="Toggle Pin to Quick Targets">${isPinned ? 'Pinned' : 'Pin'}</button>`;
+            }
+
+            li.innerHTML = `
+                <div class="file-info" style="flex: 1;">
+                    <div class="file-name">
+                        <span class="badge ${badgeClass}">${badgeText}</span>
+                        <span>${file.name}</span>
+                    </div>
+                    <span class="file-meta-small">${file.isDir ? 'Folder' : file.sizeMB.toFixed(2) + ' MB'} | ${file.modTime}</span>
+                </div>
+                ${pinBtn}
+            `;
+            
+            const btnEl = li.querySelector('.pin-btn') as HTMLButtonElement;
+            if (btnEl) {
+                btnEl.onclick = async (e) => {
+                    e.stopPropagation();
+                    quickTargets = await PinTarget(file.path);
+                    renderQuickTargets();
+                    renderFileList(); // Re-render to update pin state visually
+                    updateSelection(true);
+                };
+            }
+        }
+
         li.onclick = () => {
             selectedIndex = index;
             updateSelection(true);
@@ -119,29 +231,31 @@ function renderFileList() {
     });
 }
 
-async function updateSelection(loadPreview: boolean = false) {
-    // Remove old selected class
+function updateSelection(loadPreview: boolean = false) {
     const oldSelected = fileListEl.querySelector('.selected');
     if (oldSelected) oldSelected.classList.remove('selected');
 
-    // Add new selected class
     const newSelected = document.getElementById(`item-${selectedIndex}`);
     if (newSelected) {
         newSelected.classList.add('selected');
-        // Scroll into view if needed (smoothly or instantly depending on user preference, instant is snappier)
         newSelected.scrollIntoView({ block: 'nearest' });
     }
 
     if (loadPreview) {
-        await renderPreview();
+        if (previewDebounceTimer) {
+            clearTimeout(previewDebounceTimer);
+        }
+        previewDebounceTimer = window.setTimeout(async () => {
+            await renderPreview();
+        }, 150);
     }
 }
 
 async function renderPreview() {
     if (files.length === 0) {
-        previewTitleEl.textContent = "Directory Empty";
+        previewTitleEl.textContent = "No matches";
         fileMetaEl.innerHTML = "";
-        previewContentEl.innerHTML = `<div class="empty-state"><p>Empty</p></div>`;
+        previewContentEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">Ø</div><p>Empty</p></div>`;
         return;
     }
 
@@ -149,19 +263,42 @@ async function renderPreview() {
     previewTitleEl.textContent = file.name;
     
     if (file.name === '../') {
-        fileMetaEl.innerHTML = `Go Up`;
-        previewContentEl.innerHTML = `<div class="empty-state"><p>Parent Directory</p></div>`;
+        fileMetaEl.innerHTML = ``;
+        previewContentEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">↑</div><p>Parent Directory</p></div>`;
         return;
     }
     
     fileMetaEl.innerHTML = `
-        Size: ${file.sizeMB.toFixed(2)} MB<br>
-        Modified: ${file.modTime}<br>
-        Perms: ${file.perms}
+        <div class="metadata-grid">
+            <div class="meta-item">
+                <span class="meta-label">Type</span>
+                <span class="meta-value">${file.isDir ? 'Directory' : 'File'}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Extension</span>
+                <span class="meta-value">${file.ext || 'None'}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Size</span>
+                <span class="meta-value">${file.sizeMB.toFixed(2)} MB</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Hidden</span>
+                <span class="meta-value">${file.isHidden ? 'Yes' : 'No'}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Modified</span>
+                <span class="meta-value">${file.modTime}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Perms</span>
+                <span class="meta-value">${file.perms}</span>
+            </div>
+        </div>
     `;
 
     if (file.isDir) {
-        previewContentEl.innerHTML = `<div class="empty-state"><p>Folder</p></div>`;
+        previewContentEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📁</div><p>Folder</p></div>`;
         return;
     }
 
@@ -172,7 +309,18 @@ async function renderPreview() {
             previewContentEl.innerHTML = `<img src="${localUrl}" class="preview-img">`;
             break;
         case 'video':
-            previewContentEl.innerHTML = `<video src="${localUrl}" class="preview-video" controls autoplay loop muted></video>`;
+            previewContentEl.innerHTML = `
+                <div class="preview-video-container">
+                    <video src="${localUrl}" class="preview-video" controls autoplay loop muted></video>
+                    <button id="btn-native-video" class="btn-native-player">Open in System Player</button>
+                </div>
+            `;
+            setTimeout(() => {
+                const btnNative = document.getElementById('btn-native-video');
+                if (btnNative) {
+                    btnNative.onclick = () => OpenNative(file.path);
+                }
+            }, 0);
             break;
         case 'pdf':
             previewContentEl.innerHTML = `<iframe src="${localUrl}" class="preview-pdf"></iframe>`;
@@ -181,10 +329,9 @@ async function renderPreview() {
         case 'document':
             previewContentEl.innerHTML = `<div class="empty-state"><p>Loading document text...</p></div>`;
             try {
-                // Fetch text preview only when clicked
                 const preview = await GetFilePreview(file.path);
                 const safeText = preview.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                previewContentEl.innerHTML = `<pre class="preview-text">${safeText}</pre>`;
+                previewContentEl.innerHTML = `<div class="preview-text-container"><pre class="preview-text">${safeText}</pre></div>`;
             } catch (e) {
                 previewContentEl.innerHTML = `<div class="empty-state"><p>Error reading file.</p></div>`;
             }
@@ -200,7 +347,10 @@ async function handleAction() {
     const file = files[selectedIndex];
     
     if (file.isDir || file.name === '../') {
+        searchBar.value = '';
         await loadDirectory(file.path);
+    } else {
+        await OpenNative(file.path);
     }
 }
 
@@ -225,20 +375,22 @@ async function handleTrash() {
     await loadDirectory(currentPath, true);
 }
 
-async function handlePickDirectory() {
-    if (files.length === 0) return;
-    const file = files[selectedIndex];
-    if (file.name === '../') return;
-
-    const targetDir = await PickDirectory();
-    if (targetDir && targetDir !== "") {
-        await MoveFile(file.path, targetDir);
-        await loadDirectory(currentPath, true);
-    }
-}
-
 function setupKeyboardListeners() {
     window.addEventListener('keydown', async (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+            e.preventDefault();
+            searchBar.focus();
+            return;
+        }
+
+        if (document.activeElement === searchBar) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
+                e.preventDefault();
+            } else {
+                return;
+            }
+        }
+
         if (files.length === 0) return;
 
         switch (e.key) {
@@ -260,15 +412,17 @@ function setupKeyboardListeners() {
                 e.preventDefault();
                 await handleAction();
                 break;
-            case 'c':
-            case 'C':
-                e.preventDefault();
-                await handlePickDirectory();
-                break;
             case 'r':
             case 'R':
                 e.preventDefault();
                 await handleTrash();
+                break;
+            case 'Escape':
+                e.preventDefault();
+                searchBar.blur();
+                if (modal.style.display !== 'none') {
+                    modal.style.display = 'none';
+                }
                 break;
             default:
                 if (e.key >= '1' && e.key <= '9') {
