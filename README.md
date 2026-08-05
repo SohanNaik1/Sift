@@ -11,7 +11,6 @@ Sift is distributed as a unified binary:
 
 Sift is a native, cross-platform application that runs flawlessly on Linux, Windows, and macOS.
 
-### 1. Pre-Built Releases (Recommended)
 ### Method 1: Pre-compiled Binaries (Easiest)
 For Windows, macOS, and Ubuntu/Debian users, you can download the ready-to-run executables from the [GitHub Releases](https://github.com/SohanNaik1/Sift/releases) page. No dependencies required (except for standard webkit on Linux).
 
