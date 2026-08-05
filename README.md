@@ -12,14 +12,16 @@ Sift is distributed as a unified binary:
 Sift is a native, cross-platform application that runs flawlessly on Linux, Windows, and macOS.
 
 ### 1. Pre-Built Releases (Recommended)
-You do not need to clone this repository or install dependencies if you just want to use the app.
-1. Navigate to the **Releases** tab on GitHub.
-2. Download the latest binary for your operating system (e.g., `sift-windows-amd64.exe`, `sift-linux-amd64`, or `sift-darwin-arm64`).
-3. Run the application!
+### Method 1: Pre-compiled Binaries (Easiest)
+For Windows, macOS, and Ubuntu/Debian users, you can download the ready-to-run executables from the [GitHub Releases](https://github.com/SohanNaik1/Sift/releases) page. No dependencies required (except for standard webkit on Linux).
 
-### 2. Build From Source
-If you prefer to compile from source, Sift requires a few standard developer tools:
-- **Go 1.20+**
+### Method 2: Build from Source (Arch Linux & Others)
+Due to how rolling-release distributions (like Arch Linux) handle WebKitGTK versions, downloading the Ubuntu-built binary from GitHub may result in a missing `webkit2gtk-4.0` library error. **Arch users should always compile from source.**
+
+Our automated `install.sh` script detects your system's libraries (automatically utilizing `webkit2gtk-4.1` for Arch) and compiles Sift flawlessly.
+
+**Prerequisites:**
+- **Go 1.20+** 
 - **Node.js & npm** 
 - **Wails CLI** (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
 
