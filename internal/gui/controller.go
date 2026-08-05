@@ -275,7 +275,10 @@ func (c *Controller) TrashFile(path string) error {
 func (c *Controller) MoveFile(src, destDir string) error {
 	if len(destDir) > 0 && destDir[0] == '~' {
 		homeDir, _ := os.UserHomeDir()
-		destDir = filepath.Join(homeDir, destDir[1:])
+		relativePath := destDir[1:]
+		relativePath = strings.TrimPrefix(relativePath, "/")
+		relativePath = strings.TrimPrefix(relativePath, "\\")
+		destDir = filepath.Join(homeDir, relativePath)
 	}
 	os.MkdirAll(destDir, os.ModePerm)
 	destPath := filepath.Join(destDir, filepath.Base(src))
