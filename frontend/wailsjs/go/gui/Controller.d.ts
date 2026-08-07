@@ -3,6 +3,8 @@
 import {gui} from '../models';
 import {context} from '../models';
 
+export function CheckForUpdates(arg1:string):Promise<string>;
+
 export function GetFilePreview(arg1:string):Promise<gui.PreviewData>;
 
 export function GetQuickTargets():Promise<Record<string, string>>;

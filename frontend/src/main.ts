@@ -1,6 +1,9 @@
 import './style.css';
+import * as Sentry from '@sentry/browser';
 // @ts-ignore
-import {ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory, OpenNative, GetTrashPath, PinTarget} from '../wailsjs/go/gui/Controller';
+import {ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory, OpenNative, GetTrashPath, PinTarget, CheckForUpdates} from '../wailsjs/go/gui/Controller';
+// @ts-ignore
+import {BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 interface FileEntry {
     name: string;
@@ -39,7 +42,28 @@ const mouseTargets = document.getElementById('quick-targets-modal-group') as HTM
 const modal = document.getElementById('hotkey-modal') as HTMLDivElement;
 const btnCloseModal = document.getElementById('btn-close-modal') as HTMLButtonElement;
 
+// Sentry Frontend Telemetry (only if DSN is provided)
+const sentryDsn = "YOUR_SENTRY_DSN_HERE";
+if (sentryDsn !== "YOUR_SENTRY_DSN_HERE") {
+    Sentry.init({
+      dsn: sentryDsn,
+    });
+}
+
 async function init() {
+
+
+    // 2. Check for Updates
+    const CURRENT_VERSION = "v1.0.0";
+    const newVersion = await CheckForUpdates(CURRENT_VERSION);
+    if (newVersion) {
+        const banner = document.getElementById('update-banner');
+        if (banner) {
+            banner.style.display = 'block';
+            banner.onclick = () => BrowserOpenURL("https://github.com/SohanNaik1/Sift/releases/latest");
+        }
+    }
+
     quickTargets = await GetQuickTargets();
     renderQuickTargets();
     setupMouseControls();
@@ -71,17 +95,29 @@ function renderQuickTargets() {
         unpinBtn.style.borderLeft = 'none';
         unpinBtn.style.padding = '4px 8px';
         unpinBtn.innerHTML = '&times;';
-        unpinBtn.title = `Unpin ${path}`;
-        unpinBtn.onclick = async (e) => {
-            e.stopPropagation();
-            quickTargets = await PinTarget(path);
-            renderQuickTargets();
-            renderFileList();
-            updateSelection(true);
-        };
+        const isPinned = Object.values(quickTargets).includes(path);
+        if (isPinned) {
+            unpinBtn.classList.add('pinned');
+            unpinBtn.title = "Unpin directory";
+        } else {
+            unpinBtn.title = "Pin to quick move";
+        }
 
-        wrapper.appendChild(btn);
-        wrapper.appendChild(unpinBtn);
+        unpinBtn.onclick = async (e) => {
+            e.stopPropagation(); // prevent row click
+            quickTargets = await PinTarget(path);
+            
+            // Toggle visual state
+            if (unpinBtn.classList.contains('pinned')) {
+                unpinBtn.classList.remove('pinned');
+                unpinBtn.title = "Pin to quick move";
+            } else {
+                unpinBtn.classList.add('pinned');
+                unpinBtn.title = "Unpin directory";
+            }
+            
+            renderQuickTargets();
+        };wrapper.appendChild(unpinBtn);
         mouseTargets.appendChild(wrapper);
     }
 }
@@ -195,8 +231,8 @@ function renderFileList() {
             const isPinned = Object.values(quickTargets).includes(file.path);
             let pinBtn = '';
             if (file.isDir) {
-                const pinStyle = isPinned ? 'display: inline-block; background-color: var(--accent); color: #fff;' : '';
-                pinBtn = `<button class="action-btn pin-btn" style="padding: 2px 6px; font-size: 0.7rem; margin-left: auto; ${pinStyle}" title="Toggle Pin to Quick Targets">${isPinned ? 'Pinned' : 'Pin'}</button>`;
+                const pinnedClass = isPinned ? 'pinned' : '';
+                pinBtn = `<button class="action-btn pin-btn ${pinnedClass}" title="Toggle Pin to Quick Targets">${isPinned ? 'Pinned' : 'Pin'}</button>`;
             }
 
             li.innerHTML = `

@@ -38,6 +38,27 @@ func (c *Controller) Quit() {
 	}
 }
 
+// CheckForUpdates calls the GitHub API to check for newer tags
+func (c *Controller) CheckForUpdates(currentVersion string) string {
+	resp, err := http.Get("https://api.github.com/repos/SohanNaik1/Sift/releases/latest")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		var result struct {
+			TagName string `json:"tag_name"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+			if result.TagName != "" && result.TagName != currentVersion {
+				return result.TagName
+			}
+		}
+	}
+	return ""
+}
+
 type FileEntry struct {
 	Name        string  `json:"name"`
 	Path        string  `json:"path"`

@@ -424,18 +424,25 @@ body {
 
 /* Pin Button */
 .pin-btn {
-  display: none;
-  background-color: var(--bg-hover);
+  display: inline-block;
+  opacity: 0.3;
+  background-color: transparent;
   border: 1px solid var(--border);
   color: var(--text-main);
   border-radius: var(--radius-card);
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
 }
 .pin-btn:hover {
-  background-color: var(--accent);
-  color: #fff;
+  opacity: 0.8;
+  background-color: var(--bg-hover);
 }
-.file-item:hover .pin-btn {
-  display: inline-block;
+.pin-btn.pinned {
+  opacity: 1;
+  background-color: #0a84ff; /* Blue accent */
+  color: #fff;
+  border-color: #0a84ff;
 }
 
 /* Metadata Pane */

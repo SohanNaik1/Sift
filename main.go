@@ -4,6 +4,10 @@ import (
 	"embed"
 	"log"
 	"os"
+	"time"
+
+	"github.com/getsentry/sentry-go"
+
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -17,6 +21,17 @@ import (
 var assets embed.FS
 
 func main() {
+	// Initialize Sentry Crash Telemetry (only if DSN is provided)
+	sentryDsn := "YOUR_SENTRY_DSN_HERE"
+	if sentryDsn != "YOUR_SENTRY_DSN_HERE" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: sentryDsn,
+		})
+		if err == nil {
+			defer sentry.Flush(2 * time.Second)
+		}
+	}
+
 	if len(os.Args) > 1 {
 		// Run the terminal CLI/TUI if arguments are passed
 		cli.Execute()

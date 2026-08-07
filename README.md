@@ -12,10 +12,10 @@ Sift is distributed as a unified binary:
 Sift is a native, cross-platform application that runs flawlessly on Linux, Windows, and macOS.
 
 ### 1. Pre-Built Releases (Recommended)
-You do not need to clone this repository or install dependencies if you just want to use the app.
+You do not need to clone this repository or install dependencies. Sift is distributed with a fully automated CI/CD pipeline.
 1. Navigate to the **Releases** tab on GitHub.
-2. Download the latest binary for your operating system (e.g., `sift-windows-amd64.exe`, `sift-linux-amd64`, or `sift-darwin-arm64`).
-3. Run the application!
+2. Download the official installer for your operating system (e.g., `sift-windows-installer.exe`, `sift-mac-universal.app.tar.gz`, or `sift-linux-amd64`).
+3. Run the installer or binary!
 
 ### 2. Build From Source
 If you prefer to compile from source, Sift requires a few standard developer tools:
@@ -26,6 +26,7 @@ If you prefer to compile from source, Sift requires a few standard developer too
 **Linux Only:** You must install WebKitGTK dev packages to compile the windowing environment.
 - **Ubuntu/Debian**: `sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config`
 - **Arch/Manjaro**: `sudo pacman -S base-devel pkgconf gtk3 webkit2gtk-4.1 gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav`
+*(Note: Arch users should always compile from source using `./install.sh` to ensure compatibility with `webkit2gtk-4.1`).*
 - **Fedora**: `sudo dnf install webkit2gtk4.0-devel gtk3-devel`
 - **openSUSE**: `sudo zypper in webkit2gtk3-devel gtk3-devel`
 
@@ -78,3 +79,9 @@ Sift reads quick-move hotkeys from a `targets.json` configuration file, shared s
 * **Auto-generation**: A default template is generated automatically if the file does not exist.
 * **Path Expansion**: Standard `~/` prefixes are natively supported and resolve to your system home directory.
 * **Customization**: Edit the `targets.json` file to map your desired keys to preferred storage directories.
+
+## Telemetry & Auto-Updates
+Sift is a production-ready application featuring:
+- **Sentry Crash Telemetry**: Silent logging of fatal panics. (Requires compiling with a valid DSN in `main.go`).
+- **Auto-Updater**: Sift silently pings the GitHub API on startup and presents a sleek UI banner if a new release is available.
+- **Automated Installers**: Powered by GitHub Actions, releasing a new tag automatically compiles NSIS Windows installers and MacOS bundles.

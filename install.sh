@@ -37,10 +37,13 @@ if command -v pkg-config &> /dev/null; then
 fi
 
 if ! command -v wails &> /dev/null; then
-    $(go env GOPATH)/bin/wails build $BUILD_FLAGS
+    $(go env GOPATH)/bin/wails build -clean $BUILD_FLAGS
 else
-    wails build $BUILD_FLAGS
+    wails build -clean $BUILD_FLAGS
 fi
+
+# Clean up any residual Wails temporary directories
+rm -rf sift-wails-tmp*
 
 echo "[Success] Build complete!"
 
