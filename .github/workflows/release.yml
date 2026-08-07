@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             platform: linux/amd64
             target: sift-linux-amd64
             build_command: "wails build -m -platform linux/amd64"
@@ -26,15 +26,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
