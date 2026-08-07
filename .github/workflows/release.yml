@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   # ── Linux ────────────────────────────────────────────────────────────────────
   build-linux:
@@ -38,7 +41,7 @@ jobs:
         run: mv build/bin/sift build/bin/sift-linux-amd64
 
       - name: Upload
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: build/bin/sift-linux-amd64
 
@@ -77,7 +80,7 @@ jobs:
           Rename-Item -Path $file.FullName -NewName "sift-windows-installer.exe"
 
       - name: Upload
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: build/bin/sift-windows-installer.exe
 
@@ -106,6 +109,6 @@ jobs:
         run: tar -czf build/bin/sift-mac-universal.app.tar.gz -C build/bin sift.app
 
       - name: Upload
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: build/bin/sift-mac-universal.app.tar.gz
