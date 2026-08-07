@@ -6,6 +6,10 @@ export function CheckForUpdates(arg1) {
   return window['go']['gui']['Controller']['CheckForUpdates'](arg1);
 }
 
+export function FindDuplicates(arg1) {
+  return window['go']['gui']['Controller']['FindDuplicates'](arg1);
+}
+
 export function GetFilePreview(arg1) {
   return window['go']['gui']['Controller']['GetFilePreview'](arg1);
 }

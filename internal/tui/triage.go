@@ -18,9 +18,16 @@ type TrashAction struct {
 	TrashPath    string
 }
 
+func getConfigPath() string {
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".local", "share", "sift")
+	os.MkdirAll(configDir, os.ModePerm)
+	return filepath.Join(configDir, "targets.json")
+}
+
 func loadQuickTargets() map[rune]string {
 	targets := make(map[rune]string)
-	configPath := "targets.json"
+	configPath := getConfigPath()
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte("{\n  \"1\": \"~/Downloads\",\n  \"2\": \"~/Pictures\"\n}")

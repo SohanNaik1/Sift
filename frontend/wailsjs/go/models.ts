@@ -1,3 +1,24 @@
+export namespace core {
+	
+	export class DuplicateGroup {
+	    hash: string;
+	    files: string[];
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DuplicateGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.files = source["files"];
+	        this.size = source["size"];
+	    }
+	}
+
+}
+
 export namespace gui {
 	
 	export class FileEntry {

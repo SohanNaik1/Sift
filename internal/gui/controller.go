@@ -17,6 +17,7 @@ import (
 
 	"sift/internal/core"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	goruntime "runtime"
 )
 
 type Controller struct {
@@ -232,9 +233,16 @@ func parseZipXML(zipPath, internalFilePath string) string {
 	return "No text content found."
 }
 
+func getConfigPath() string {
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".local", "share", "sift")
+	os.MkdirAll(configDir, os.ModePerm)
+	return filepath.Join(configDir, "targets.json")
+}
+
 func (c *Controller) GetQuickTargets() map[string]string {
 	targets := make(map[string]string)
-	configPath := "targets.json"
+	configPath := getConfigPath()
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return map[string]string{"1": "~/Downloads", "2": "~/Pictures"}
@@ -256,7 +264,7 @@ func (c *Controller) PinTarget(path string) map[string]string {
 			delete(targets, k)
 			data, err := json.MarshalIndent(targets, "", "  ")
 			if err == nil {
-				os.WriteFile("targets.json", data, 0644)
+				os.WriteFile(getConfigPath(), data, 0644)
 			}
 			return targets
 		}
@@ -274,7 +282,7 @@ func (c *Controller) PinTarget(path string) map[string]string {
 	// Save
 	data, err := json.MarshalIndent(targets, "", "  ")
 	if err == nil {
-		os.WriteFile("targets.json", data, 0644)
+		os.WriteFile(getConfigPath(), data, 0644)
 	}
 	
 	return targets
@@ -319,7 +327,7 @@ func (c *Controller) PickDirectory() string {
 func (c *Controller) OpenNative(path string) error {
 	// Simple fallback to xdg-open on Linux (or open on Mac, start on Windows)
 	var cmd *exec.Cmd
-	switch os.Getenv("GOOS") {
+	switch goruntime.GOOS {
 	case "windows":
 		cmd = exec.Command("cmd", "/c", "start", "", path)
 	case "darwin":
@@ -328,4 +336,8 @@ func (c *Controller) OpenNative(path string) error {
 		cmd = exec.Command("xdg-open", path)
 	}
 	return cmd.Start()
+}
+
+func (c *Controller) FindDuplicates(dirs []string) ([]core.DuplicateGroup, error) {
+	return core.FindDuplicates(dirs)
 }

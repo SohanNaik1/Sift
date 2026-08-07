@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"os"
@@ -40,6 +41,7 @@ func main() {
 
 	// Create an instance of the app structure
 	app := gui.NewApp()
+	controller := gui.NewController()
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -51,10 +53,13 @@ func main() {
 			Handler: gui.NewFilePreviewHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		OnStartup:        app.Startup,
+		OnStartup: func(ctx context.Context) {
+			app.Startup(ctx)
+			controller.Startup(ctx)
+		},
 		Bind: []interface{}{
 			app,
-			gui.NewController(),
+			controller,
 		},
 	})
 
