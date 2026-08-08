@@ -19,11 +19,3 @@ Thumbs.db
 
 # Local configuration created at runtime
 targets.json
-
-# Wails
-build/bin/
-frontend/dist/
-frontend/node_modules/
-
-# Sift specific
-targets.json

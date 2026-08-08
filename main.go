@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"os"
+	"time"
+
+	"github.com/getsentry/sentry-go"
+
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -17,6 +22,17 @@ import (
 var assets embed.FS
 
 func main() {
+	// Initialize Sentry Crash Telemetry (only if DSN is provided)
+	sentryDsn := "YOUR_SENTRY_DSN_HERE"
+	if sentryDsn != "YOUR_SENTRY_DSN_HERE" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: sentryDsn,
+		})
+		if err == nil {
+			defer sentry.Flush(2 * time.Second)
+		}
+	}
+
 	if len(os.Args) > 1 {
 		// Run the terminal CLI/TUI if arguments are passed
 		cli.Execute()
@@ -25,6 +41,7 @@ func main() {
 
 	// Create an instance of the app structure
 	app := gui.NewApp()
+	controller := gui.NewController()
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -36,10 +53,13 @@ func main() {
 			Handler: gui.NewFilePreviewHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		OnStartup:        app.Startup,
+		OnStartup: func(ctx context.Context) {
+			app.Startup(ctx)
+			controller.Startup(ctx)
+		},
 		Bind: []interface{}{
 			app,
-			gui.NewController(),
+			controller,
 		},
 	})
 
