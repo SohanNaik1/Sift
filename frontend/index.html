@@ -7,11 +7,6 @@
     <link rel="stylesheet" href="./src/style.css"/>
 </head>
 <body>
-    <!-- Update Banner -->
-    <div id="update-banner" style="display: none; background: #0a84ff; color: white; padding: 6px; text-align: center; font-size: 0.8rem; font-weight: bold; cursor: pointer;">
-        🚀 A new version of Sift is available! Click here to download.
-    </div>
-
     <!-- Welcome Modal -->
     <div id="welcome-modal" class="modal-overlay" style="display: none; z-index: 9999;">
         <div class="modal-content" style="max-width: 500px; text-align: center; padding: 32px;">
@@ -51,15 +46,25 @@
                 <button id="btn-close-modal" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="hotkey-row"><kbd>↑</kbd> <kbd>↓</kbd> <span>Navigate Files</span></div>
-                <div class="hotkey-row"><kbd>Enter</kbd> <span>Open File</span></div>
-                <div class="hotkey-row"><kbd>R</kbd> <span>Trash File</span></div>
-                <div class="hotkey-row"><kbd>1-9</kbd> <span>Quick Move to Preset</span></div>
-                <div class="hotkey-row"><kbd>Ctrl+F</kbd> <span>Focus Search</span></div>
-                <div class="hotkey-row"><kbd>Esc</kbd> <span>Unfocus / Close Modal</span></div>
-                <hr style="border: 1px solid var(--border); margin: 8px 0;" />
-                <h4 style="margin-bottom: 4px;">Quick Move Presets</h4>
-                <div id="quick-targets-modal-group" class="quick-targets-group" style="flex-wrap: wrap;"></div>
+                <div id="hotkeys-triage">
+                    <div class="hotkey-row"><kbd>↑</kbd> <kbd>↓</kbd> <span>Navigate Files</span></div>
+                    <div class="hotkey-row"><kbd>Enter</kbd> <span>Open File</span></div>
+                    <div class="hotkey-row"><kbd>R</kbd> <span>Trash File</span></div>
+                    <div class="hotkey-row"><kbd>1-9</kbd> <span>Quick Move to Preset</span></div>
+                    <div class="hotkey-row"><kbd>Ctrl+F</kbd> <span>Focus Search</span></div>
+                    <div class="hotkey-row"><kbd>Esc</kbd> <span>Unfocus / Close Modal</span></div>
+                    <hr style="border: 1px solid var(--border); margin: 8px 0;" />
+                    <h4 style="margin-bottom: 4px;">Quick Move Presets</h4>
+                    <div id="quick-targets-modal-group" class="quick-targets-group" style="flex-wrap: wrap;"></div>
+                </div>
+                <div id="hotkeys-dupes" style="display: none;">
+                    <div class="hotkey-row"><kbd>↑</kbd> <kbd>↓</kbd> <span>Navigate Duplicates</span></div>
+                    <div class="hotkey-row"><kbd>Enter</kbd> <span>Open File</span></div>
+                    <div class="hotkey-row"><kbd>R</kbd> <span>Mark for Trash</span></div>
+                    <div class="hotkey-row"><kbd>Shift</kbd> + <kbd>Click</kbd> <span>Select Range</span></div>
+                    <div class="hotkey-row"><kbd>Ctrl</kbd> + <kbd>Click</kbd> <span>Toggle Selection</span></div>
+                    <div class="hotkey-row"><kbd>Esc</kbd> <span>Close Modal</span></div>
+                </div>
             </div>
         </div>
     </div>
@@ -99,6 +104,7 @@
                 <div class="triage-deck">
                     <button id="btn-open" class="action-btn" title="Open selected file">Open</button>
                     <button id="btn-trash" class="action-btn danger" title="Trash selected file">Trash</button>
+                    <button id="btn-empty-trash" class="action-btn danger" style="display: none;" title="Empty Recycle Bin">Empty Trash</button>
                     <button id="btn-trash-portal" class="action-btn warning" title="View Sift Trash Directory">Recycle Bin</button>
                 </div>
                 </div>
@@ -123,11 +129,24 @@
                         <input type="text" id="input-add-dir" class="search-input" placeholder="Enter path to scan..." style="flex: 1;" autocomplete="off" spellcheck="false"/>
                         <button id="btn-add-dir" class="action-btn" style="white-space: nowrap;">+ Add Directory</button>
                     </div>
-                    <div style="padding: 8px 16px;">
-                        <button id="btn-scan-dupes" class="action-btn" style="width: 100%; background: #0a84ff; color: white;">start scan</button>
+                    <div style="padding: 12px 16px; display: flex; justify-content: center;">
+                        <button id="btn-scan-dupes" class="action-btn primary-scan-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            Start Scan
+                        </button>
                     </div>
                     <ul id="scan-dirs-list" class="file-list" style="flex: none; max-height: 150px; overflow-y: auto; border-bottom: 1px solid var(--border);"></ul>
-                    <div class="sidebar-header"><span style="font-weight: 600;">Found Duplicates</span></div>
+                    <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600;">Found Duplicates</span>
+                        <div class="auto-select-group" style="display: flex; align-items: center;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-right: 8px;">Auto-Select:</span>
+                            <div class="segmented-control">
+                                <button id="btn-auto-none" class="segment-btn active">None</button>
+                                <button id="btn-auto-oldest" class="segment-btn">Oldest</button>
+                                <button id="btn-auto-newest" class="segment-btn">Newest</button>
+                            </div>
+                        </div>
+                    </div>
                     <ul id="dupes-results-list" class="file-list" style="flex: 1; overflow-y: auto;">
                         <div style="padding: 16px; text-align: center; color: var(--text-secondary);">Add directories and scan to find duplicates.</div>
                     </ul>
@@ -144,8 +163,8 @@
                         </div>
                         <div class="triage-deck">
                             <button id="btn-dupe-open" class="action-btn" title="Open selected file">Open</button>
-                            <button id="btn-dupe-keep" class="action-btn" style="color: #30d158; border-color: rgba(48, 209, 88, 0.3);" title="Keep this copy (Trash others)">Keep This Copy</button>
                             <button id="btn-dupe-trash" class="action-btn danger" title="Trash selected file">Trash</button>
+                            <button id="btn-trash-portal-dupes" class="action-btn warning" title="View Sift Trash Directory">Recycle Bin</button>
                         </div>
                     </div>
                 </main>

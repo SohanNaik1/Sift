@@ -61,6 +61,15 @@ sift
 * **[Enter]**: Open directory or file.
 * **[?]**: Open Hotkeys & Quick Paths modal.
 
+### Duplicate Scanner (Dupes Tab)
+Sift includes an incredibly fast duplicate file finder built directly into the UI.
+* **Multi-Directory Scanning**: Add multiple directories and scan them simultaneously for identical files.
+* **Auto-Select Engine**: Instantly mark duplicate files for deletion using intelligent rules (Oldest, Newest) while keeping the original safe.
+* **Recycle Bin Parity**: Instantly push duplicate clusters to the local trash with a single hotkey (`[R]`).
+
+### Internal Media Server 
+Sift features a high-performance native Go media server to handle video previews instead of piping blobs over Wails IPC. By streaming massive video files using native HTTP 206 Byte Ranges locally (`127.0.0.1:0`), memory bloat is entirely circumvented on both Linux and Windows.
+
 ### Terminal TUI Mode
 The Terminal UI (TUI) is fully intact and allows you to rapidly triage files via SSH or entirely from the terminal. 
 To access it, you **must** pass the `triage` command along with a target directory:

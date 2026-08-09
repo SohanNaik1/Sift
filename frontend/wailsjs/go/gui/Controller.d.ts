@@ -6,9 +6,13 @@ import {context} from '../models';
 
 export function CheckForUpdates(arg1:string):Promise<string>;
 
+export function EmptyTrash():Promise<void>;
+
 export function FindDuplicates(arg1:Array<string>):Promise<Array<core.DuplicateGroup>>;
 
 export function GetFilePreview(arg1:string):Promise<gui.PreviewData>;
+
+export function GetMediaServerURL():Promise<string>;
 
 export function GetQuickTargets():Promise<Record<string, string>>;
 

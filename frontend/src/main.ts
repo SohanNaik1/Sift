@@ -1,9 +1,9 @@
 import './style.css';
 import * as Sentry from '@sentry/browser';
 // @ts-ignore
-import {ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory, OpenNative, GetTrashPath, PinTarget, CheckForUpdates, FindDuplicates} from '../wailsjs/go/gui/Controller';
+import { ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory, OpenNative, GetTrashPath, PinTarget, CheckForUpdates, FindDuplicates, GetMediaServerURL, EmptyTrash } from '../wailsjs/go/gui/Controller';
 // @ts-ignore
-import {BrowserOpenURL} from '../wailsjs/runtime/runtime';
+import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 interface FileEntry {
     name: string;
@@ -35,6 +35,8 @@ const searchBar = document.getElementById('search-bar') as HTMLInputElement;
 const btnOpen = document.getElementById('btn-open') as HTMLButtonElement;
 const btnTrash = document.getElementById('btn-trash') as HTMLButtonElement;
 const btnTrashPortal = document.getElementById('btn-trash-portal') as HTMLButtonElement;
+const btnTrashPortalDupes = document.getElementById('btn-trash-portal-dupes') as HTMLButtonElement;
+const btnEmptyTrash = document.getElementById('btn-empty-trash') as HTMLButtonElement;
 const btnHotkeys = document.getElementById('btn-hotkeys') as HTMLButtonElement;
 const btnHome = document.getElementById('btn-home') as HTMLButtonElement;
 const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
@@ -46,7 +48,7 @@ const btnCloseModal = document.getElementById('btn-close-modal') as HTMLButtonEl
 const sentryDsn = "YOUR_SENTRY_DSN_HERE";
 if (sentryDsn !== "YOUR_SENTRY_DSN_HERE") {
     Sentry.init({
-      dsn: sentryDsn,
+        dsn: sentryDsn,
     });
 }
 
@@ -69,17 +71,6 @@ async function init() {
     // 3. Dupes Page Setup
     setupDupes();
 
-    // 4. Check for Updates
-    const CURRENT_VERSION = "v1.0.0";
-    const newVersion = await CheckForUpdates(CURRENT_VERSION);
-    if (newVersion) {
-        const banner = document.getElementById('update-banner');
-        if (banner) {
-            banner.style.display = 'block';
-            banner.onclick = () => BrowserOpenURL("https://github.com/SohanNaik1/Sift/releases/latest");
-        }
-    }
-
     quickTargets = await GetQuickTargets();
     renderQuickTargets();
     setupMouseControls();
@@ -94,7 +85,7 @@ function renderQuickTargets() {
         const wrapper = document.createElement('div');
         wrapper.style.display = 'inline-flex';
         wrapper.style.margin = '4px';
-        
+
         const btn = document.createElement('button');
         btn.className = 'action-btn';
         btn.style.borderRadius = 'var(--radius-sm) 0 0 var(--radius-sm)';
@@ -104,7 +95,7 @@ function renderQuickTargets() {
             modal.style.display = 'none';
             handleMove(key);
         };
-        
+
         const unpinBtn = document.createElement('button');
         unpinBtn.className = 'action-btn danger';
         unpinBtn.style.borderRadius = '0 var(--radius-sm) var(--radius-sm) 0';
@@ -122,7 +113,7 @@ function renderQuickTargets() {
         unpinBtn.onclick = async (e) => {
             e.stopPropagation(); // prevent row click
             quickTargets = await PinTarget(path);
-            
+
             // Toggle visual state
             if (unpinBtn.classList.contains('pinned')) {
                 unpinBtn.classList.remove('pinned');
@@ -130,9 +121,13 @@ function renderQuickTargets() {
             } else {
                 unpinBtn.classList.add('pinned');
                 unpinBtn.title = "Unpin directory";
-            }
-            
+            } e
+
             renderQuickTargets();
+            if (document.getElementById('tab-triage')?.classList.contains('active')) {
+                renderFileList();
+                updateSelection(true);
+            }
         };
         wrapper.appendChild(btn);
         wrapper.appendChild(unpinBtn);
@@ -148,11 +143,37 @@ function setupMouseControls() {
         searchBar.value = '';
         await loadDirectory(trashPath);
     };
+    btnTrashPortalDupes.onclick = async () => {
+        const tabTriage = document.getElementById('tab-triage');
+        if (tabTriage) tabTriage.click();
+        const trashPath = await GetTrashPath();
+        searchBar.value = '';
+        await loadDirectory(trashPath);
+    };
+    btnEmptyTrash.onclick = async () => {
+        if (window.confirm("Are you sure you want to permanently delete all items in the Recycle Bin?")) {
+            try {
+                await EmptyTrash();
+                await loadDirectory(currentPath); // Refresh
+            } catch (err) {
+                console.error("Failed to empty trash", err);
+            }
+        }
+    };
     btnHome.onclick = async () => {
         searchBar.value = '';
         await loadDirectory('~');
     };
     btnHotkeys.onclick = () => {
+        const triageHotkeys = document.getElementById('hotkeys-triage');
+        const dupesHotkeys = document.getElementById('hotkeys-dupes');
+        if (document.getElementById('tab-dupes')?.classList.contains('active')) {
+            if (triageHotkeys) triageHotkeys.style.display = 'none';
+            if (dupesHotkeys) dupesHotkeys.style.display = 'block';
+        } else {
+            if (triageHotkeys) triageHotkeys.style.display = 'block';
+            if (dupesHotkeys) dupesHotkeys.style.display = 'none';
+        }
         modal.style.display = 'flex';
     };
     btnCloseModal.onclick = () => {
@@ -177,7 +198,7 @@ function setupRouting() {
     const switchTab = (tab: string) => {
         [tabTriage, tabStaging, tabDupes].forEach(t => t.classList.remove('active'));
         [pageTriage, pageStaging, pageDupes].forEach(p => p.style.display = 'none');
-        
+
         if (tab === 'triage') {
             tabTriage.classList.add('active');
             pageTriage.style.display = 'flex';
@@ -194,7 +215,7 @@ function setupRouting() {
     tabTriage.onclick = () => switchTab('triage');
     tabStaging.onclick = () => switchTab('staging');
     tabDupes.onclick = () => switchTab('dupes');
-    
+
     // Make switchTab available globally for hotkeys
     (window as any).switchTab = switchTab;
 }
@@ -210,7 +231,7 @@ function setupDupes() {
     const scanDirsList = document.getElementById('scan-dirs-list')!;
     const btnDupeOpen = document.getElementById('btn-dupe-open')!;
     const btnDupeTrash = document.getElementById('btn-dupe-trash')!;
-    
+
     const inputAddDir = document.getElementById('input-add-dir') as HTMLInputElement;
 
     btnAddDir.onclick = async () => {
@@ -224,28 +245,98 @@ function setupDupes() {
             renderScanDirs();
         }
     };
-    
+
     btnScan.onclick = async () => {
         if (scanDirs.length === 0) return;
-        btnScan.textContent = "Scanning... (this may take a while)";
+        btnScan.innerHTML = "Scanning... (this may take a while)";
         btnScan.style.opacity = "0.7";
         btnScan.style.pointerEvents = "none";
-        
+
         try {
             dupeResults = await FindDuplicates(scanDirs) || [];
-            selectedDupeIndices = new Set([0]);
+            selectedDupeIndices.clear();
             lastSelectedDupeIndex = 0;
+
+            const btnAutoOldest = document.getElementById('btn-auto-oldest');
+            const btnAutoNewest = document.getElementById('btn-auto-newest');
+            if (btnAutoOldest && btnAutoOldest.classList.contains('active')) {
+                let globalIdx = 0;
+                dupeResults.forEach(group => {
+                    if (group.files.length > 1) {
+                        selectedDupeIndices.add(globalIdx); // Oldest file is sorted first by the backend
+                    }
+                    globalIdx += group.files.length;
+                });
+            } else if (btnAutoNewest && btnAutoNewest.classList.contains('active')) {
+                let globalIdx = 0;
+                dupeResults.forEach(group => {
+                    if (group.files.length > 1) {
+                        selectedDupeIndices.add(globalIdx + group.files.length - 1); // Newest file is sorted last by the backend
+                    }
+                    globalIdx += group.files.length;
+                });
+            } else {
+                selectedDupeIndices.add(0);
+            }
+
             renderDupeResults();
             updateDupeSelection();
         } catch (e) {
             console.error("Scan failed", e);
         }
-        
-        btnScan.textContent = "start scan";
+
+        btnScan.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> Start Scan`;
         btnScan.style.opacity = "1";
         btnScan.style.pointerEvents = "auto";
     };
-    
+
+    // Auto-Select Segmented Control
+    const btnAutoNone = document.getElementById('btn-auto-none')!;
+    const btnAutoOldest = document.getElementById('btn-auto-oldest')!;
+    const btnAutoNewest = document.getElementById('btn-auto-newest')!;
+
+    btnAutoNone.onclick = () => {
+        btnAutoNone.classList.add('active');
+        btnAutoOldest.classList.remove('active');
+        btnAutoNewest.classList.remove('active');
+        selectedDupeIndices.clear();
+        updateDupeSelection();
+    };
+
+    btnAutoOldest.onclick = () => {
+        btnAutoOldest.classList.add('active');
+        btnAutoNone.classList.remove('active');
+        btnAutoNewest.classList.remove('active');
+
+        selectedDupeIndices.clear();
+        let globalIdx = 0;
+        dupeResults.forEach(group => {
+            if (group.files.length > 1) {
+                selectedDupeIndices.add(globalIdx); // oldest file is first in array
+            }
+            globalIdx += group.files.length;
+        });
+
+        updateDupeSelection();
+    };
+
+    btnAutoNewest.onclick = () => {
+        btnAutoNewest.classList.add('active');
+        btnAutoNone.classList.remove('active');
+        btnAutoOldest.classList.remove('active');
+
+        selectedDupeIndices.clear();
+        let globalIdx = 0;
+        dupeResults.forEach(group => {
+            if (group.files.length > 1) {
+                selectedDupeIndices.add(globalIdx + group.files.length - 1); // newest file is last in array
+            }
+            globalIdx += group.files.length;
+        });
+
+        updateDupeSelection();
+    };
+
     const renderScanDirs = () => {
         scanDirsList.innerHTML = '';
         scanDirs.forEach((dir, i) => {
@@ -264,43 +355,12 @@ function setupDupes() {
             scanDirsList.appendChild(li);
         });
     };
-    
+
     btnDupeOpen.onclick = async () => {
         const item = getSelectedDupeItem();
         if (item) await OpenNative(item);
     };
 
-    const btnDupeKeep = document.getElementById('btn-dupe-keep')!;
-    btnDupeKeep.onclick = async () => {
-        const itemToKeep = getSelectedDupeItem();
-        if (!itemToKeep) return;
-        
-        // Find the group this item belongs to
-        let targetGroupIndex = -1;
-        for (let i = 0; i < dupeResults.length; i++) {
-            if (dupeResults[i].files.includes(itemToKeep)) {
-                targetGroupIndex = i;
-                break;
-            }
-        }
-        
-        if (targetGroupIndex !== -1) {
-            const group = dupeResults[targetGroupIndex];
-            const filesToTrash = group.files.filter((f: string) => f !== itemToKeep);
-            
-            for (const f of filesToTrash) {
-                await TrashFile(f);
-            }
-            
-            // Remove the entire group from results since we kept one and trashed the rest
-            dupeResults.splice(targetGroupIndex, 1);
-            selectedDupeIndices = new Set([0]);
-            lastSelectedDupeIndex = 0;
-            renderDupeResults();
-            updateDupeSelection();
-        }
-    };
-    
     btnDupeTrash.onclick = async () => {
         const items = getSelectedDupeItems();
         if (items.length > 0) {
@@ -311,14 +371,14 @@ function setupDupes() {
                 }
             }
             await new Promise(r => setTimeout(r, 150));
-            
+
             // Sort indices descending to remove from array safely
             const sortedIndices = Array.from(selectedDupeIndices).sort((a, b) => b - a);
             for (let i = 0; i < items.length; i++) {
                 await TrashFile(items[i]);
                 removeDupeItem(sortedIndices[i]);
             }
-            
+
             selectedDupeIndices = new Set([0]);
             lastSelectedDupeIndex = 0;
             renderDupeResults();
@@ -367,7 +427,7 @@ function removeDupeItem(globalIndex: number) {
 function renderDupeResults() {
     const list = document.getElementById('dupes-results-list')!;
     list.innerHTML = '';
-    
+
     if (dupeResults.length === 0) {
         list.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-secondary);">No duplicates found! 🎉</div>`;
         document.getElementById('dupe-preview-content')!.innerHTML = `<div class="empty-state"><div class="empty-state-icon">Ø</div><p>No duplicates</p></div>`;
@@ -375,22 +435,29 @@ function renderDupeResults() {
         document.getElementById('dupe-file-meta')!.innerHTML = "";
         return;
     }
-    
+
     let globalIndex = 0;
     dupeResults.forEach((group, groupIndex) => {
+        const card = document.createElement('div');
+        card.className = 'dupe-card';
+        card.id = `dupe-card-${groupIndex}`;
+
         const groupHeader = document.createElement('div');
-        groupHeader.style.padding = '8px 12px';
-        groupHeader.style.background = 'rgba(255,255,255,0.05)';
-        groupHeader.style.fontSize = '0.75rem';
-        groupHeader.style.color = 'var(--text-muted)';
-        const sizeMB = (group.size / (1024*1024)).toFixed(2);
+        groupHeader.className = 'dupe-group-header';
+        const sizeMB = (group.size / (1024 * 1024)).toFixed(2);
         groupHeader.textContent = `Group ${groupIndex + 1} • ${sizeMB} MB • Hash: ${group.hash.substring(0, 8)}...`;
-        list.appendChild(groupHeader);
-        
+        card.appendChild(groupHeader);
+
+        const fileList = document.createElement('ul');
+        fileList.className = 'file-list';
+        fileList.style.padding = '4px';
+        fileList.style.margin = '0';
+
         group.files.forEach((file: string) => {
             const li = document.createElement('li');
             li.className = 'file-item';
             li.id = `dupe-item-${globalIndex}`;
+            li.setAttribute('data-group-index', groupIndex.toString());
             li.innerHTML = `
                 <div class="file-info">
                     <div class="file-name"><span>${file.split('/').pop() || file.split('\\').pop()}</span></div>
@@ -419,9 +486,11 @@ function renderDupeResults() {
                 }
                 updateDupeSelection();
             };
-            list.appendChild(li);
+            fileList.appendChild(li);
             globalIndex++;
         });
+        card.appendChild(fileList);
+        list.appendChild(card);
     });
 }
 
@@ -429,51 +498,88 @@ function updateDupeSelection() {
     const list = document.getElementById('dupes-results-list')!;
     const oldSelected = list.querySelectorAll('.selected');
     oldSelected.forEach(el => el.classList.remove('selected'));
-    
+
+    const oldActiveCards = list.querySelectorAll('.dupe-card.active');
+    oldActiveCards.forEach(el => el.classList.remove('active'));
+
+    const oldActivePreviews = list.querySelectorAll('.active-preview');
+    oldActivePreviews.forEach(el => el.classList.remove('active-preview'));
+
     selectedDupeIndices.forEach(idx => {
         const newSelected = document.getElementById(`dupe-item-${idx}`);
         if (newSelected) {
             newSelected.classList.add('selected');
         }
     });
-    
+
     const latestSelected = document.getElementById(`dupe-item-${lastSelectedDupeIndex}`);
     if (latestSelected) {
+        latestSelected.classList.add('active-preview');
         latestSelected.scrollIntoView({ block: 'nearest' });
+        const groupIndex = latestSelected.getAttribute('data-group-index');
+        if (groupIndex !== null) {
+            const activeCard = document.getElementById(`dupe-card-${groupIndex}`);
+            if (activeCard) activeCard.classList.add('active');
+        }
     }
-    
+
     const file = getSelectedDupeItem();
     if (file) {
         document.getElementById('dupe-preview-title')!.textContent = file.split('/').pop() || file.split('\\').pop() || '';
         document.getElementById('dupe-file-meta')!.innerHTML = `<div class="meta-item"><span class="meta-label">Path</span><span class="meta-value" style="font-size: 0.7rem;">${file}</span></div>`;
-        
+
         const ext = file.split('.').pop()?.toLowerCase() || '';
         const imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'];
         const vidExts = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi'];
-        const localUrl = `/local/${file}`;
-        
-        if (imgExts.includes(ext)) {
-            document.getElementById('dupe-preview-content')!.innerHTML = `<img src="${localUrl}" class="preview-img">`;
-        } else if (vidExts.includes(ext)) {
-            document.getElementById('dupe-preview-content')!.innerHTML = `
-                <div class="preview-video-container">
-                    <video src="${localUrl}" class="preview-video" controls autoplay loop muted></video>
-                </div>
-            `;
+        const pdfExts = ['pdf'];
+
+        if (imgExts.includes(ext) || vidExts.includes(ext) || pdfExts.includes(ext)) {
+            document.getElementById('dupe-preview-content')!.innerHTML = `<div style="padding: 16px; color: var(--text-secondary); text-align: center;">Loading media...</div>`;
+
+            GetMediaServerURL().then(serverUrl => {
+                const currentFile = getSelectedDupeItem();
+                if (currentFile !== file) return;
+
+                const mediaUrl = `${serverUrl}/video-preview?path=${encodeURIComponent(file)}`;
+
+                if (imgExts.includes(ext)) {
+                    document.getElementById('dupe-preview-content')!.innerHTML = `<img src="${mediaUrl}" class="preview-img">`;
+                } else if (vidExts.includes(ext)) {
+                    const container = document.getElementById('dupe-preview-content')!;
+                    container.innerHTML = `<div class="preview-video-container" id="dupe-video-container"></div>`;
+                    const videoEl = document.createElement('video');
+                    videoEl.src = mediaUrl;
+                    videoEl.className = 'preview-video';
+                    videoEl.controls = true;
+                    videoEl.autoplay = true;
+                    videoEl.loop = true;
+                    videoEl.setAttribute('muted', 'true');
+                    videoEl.setAttribute('playsinline', 'true');
+                    videoEl.muted = true;
+                    document.getElementById('dupe-video-container')!.appendChild(videoEl);
+                } else if (pdfExts.includes(ext)) {
+                    document.getElementById('dupe-preview-content')!.innerHTML = `<embed src="${mediaUrl}" type="application/pdf" class="preview-pdf" style="width: 100%; height: 100%; border: none;"></embed>`;
+                }
+            }).catch(err => {
+                const currentFile = getSelectedDupeItem();
+                if (currentFile !== file) return;
+                document.getElementById('dupe-preview-content')!.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><p>Failed to load media</p><p style="font-size:0.75rem; color:var(--danger)">${err}</p></div>`;
+            });
         } else {
             document.getElementById('dupe-preview-content')!.innerHTML = `<div style="padding: 16px; color: var(--text-secondary); text-align: center;">Loading preview...</div>`;
-            
+
             GetFilePreview(file).then(previewData => {
                 const currentFile = getSelectedDupeItem();
-            if (currentFile !== file) return;
-            
-            if (previewData && previewData.text) {
-                let html = `<pre style="padding: 16px; font-size: 0.8rem; overflow: auto; height: 100%; font-family: var(--font-mono); color: var(--text-main); line-height: 1.4; white-space: pre-wrap;">${previewData.text}</pre>`;
-                document.getElementById('dupe-preview-content')!.innerHTML = html;
-            } else {
-                document.getElementById('dupe-preview-content')!.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📄</div><p>Identical Content Match</p><p style="font-size:0.75rem; opacity:0.7;">No text preview available</p></div>`;
-            }
-        });
+                if (currentFile !== file) return;
+
+                if (previewData && previewData.text) {
+                    const safeText = previewData.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    let html = `<pre style="padding: 16px; font-size: 0.8rem; overflow: auto; height: 100%; font-family: var(--font-mono); color: var(--text-main); line-height: 1.4; white-space: pre-wrap;">${safeText}</pre>`;
+                    document.getElementById('dupe-preview-content')!.innerHTML = html;
+                } else {
+                    document.getElementById('dupe-preview-content')!.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📄</div><p>Identical Content Match</p><p style="font-size:0.75rem; opacity:0.7;">No text preview available</p></div>`;
+                }
+            });
         }
     }
 }
@@ -506,7 +612,7 @@ async function loadDirectory(path: string, preserveIndex: boolean = false) {
         const oldIndex = selectedIndex;
         allFiles = await ListFiles(path);
         files = [...allFiles];
-        
+
         if (allFiles.length > 0) {
             if (allFiles[0].name === '../' && allFiles.length > 1) {
                 currentPath = allFiles[1].path.substring(0, allFiles[1].path.lastIndexOf('/'));
@@ -523,9 +629,16 @@ async function loadDirectory(path: string, preserveIndex: boolean = false) {
         } else {
             selectedIndex = 0;
         }
-        
+
+        const trashPath = await GetTrashPath();
+        if (path === trashPath) {
+            btnEmptyTrash.style.display = 'inline-block';
+        } else {
+            btnEmptyTrash.style.display = 'none';
+        }
+
         renderFileList();
-        updateSelection(true); 
+        updateSelection(true);
     } catch (e) {
         console.error(e);
         previewContentEl.innerHTML = `<div class="empty-state"><p>Error loading directory</p></div>`;
@@ -538,7 +651,7 @@ function renderFileList() {
         const li = document.createElement('li');
         li.className = `file-item`;
         li.id = `item-${index}`;
-        
+
         if (file.name === '../') {
             li.innerHTML = `
                 <div class="file-info">
@@ -576,7 +689,7 @@ function renderFileList() {
                 </div>
                 ${pinBtn}
             `;
-            
+
             const btnEl = li.querySelector('.pin-btn') as HTMLButtonElement;
             if (btnEl) {
                 btnEl.onclick = async (e) => {
@@ -600,11 +713,15 @@ function renderFileList() {
 
 function updateSelection(loadPreview: boolean = false) {
     const oldSelected = fileListEl.querySelector('.selected');
-    if (oldSelected) oldSelected.classList.remove('selected');
+    if (oldSelected) {
+        oldSelected.classList.remove('selected');
+        oldSelected.classList.remove('active-preview');
+    }
 
     const newSelected = document.getElementById(`item-${selectedIndex}`);
     if (newSelected) {
         newSelected.classList.add('selected');
+        newSelected.classList.add('active-preview');
         newSelected.scrollIntoView({ block: 'nearest' });
     }
 
@@ -628,13 +745,13 @@ async function renderPreview() {
 
     const file = files[selectedIndex];
     previewTitleEl.textContent = file.name;
-    
+
     if (file.name === '../') {
         fileMetaEl.innerHTML = ``;
         previewContentEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">↑</div><p>Parent Directory</p></div>`;
         return;
     }
-    
+
     fileMetaEl.innerHTML = `
         <div class="metadata-grid">
             <div class="meta-item">
@@ -669,29 +786,56 @@ async function renderPreview() {
         return;
     }
 
-    const localUrl = `/local/${file.path}`;
+    if (file.previewType === 'image' || file.previewType === 'video' || file.previewType === 'pdf') {
+        previewContentEl.innerHTML = `<div style="padding: 16px; color: var(--text-secondary); text-align: center;">Loading media...</div>`;
+
+        GetMediaServerURL().then(serverUrl => {
+            if (selectedIndex !== -1 && files[selectedIndex].path !== file.path) return;
+
+            const mediaUrl = `${serverUrl}/video-preview?path=${encodeURIComponent(file.path)}`;
+
+            switch (file.previewType) {
+                case 'image':
+                    previewContentEl.innerHTML = `<img src="${mediaUrl}" class="preview-img">`;
+                    break;
+                case 'video':
+                    previewContentEl.innerHTML = `
+                        <div class="preview-video-container" id="triage-video-container">
+                            <button id="btn-native-video" class="btn-native-player">Open in System Player</button>
+                        </div>
+                    `;
+                    const vidEl = document.createElement('video');
+                    vidEl.src = mediaUrl;
+                    vidEl.className = 'preview-video';
+                    vidEl.controls = true;
+                    vidEl.autoplay = true;
+                    vidEl.loop = true;
+                    vidEl.setAttribute('muted', 'true');
+                    vidEl.setAttribute('playsinline', 'true');
+                    vidEl.muted = true;
+
+                    setTimeout(() => {
+                        const container = document.getElementById('triage-video-container');
+                        if (container) container.insertBefore(vidEl, container.firstChild);
+
+                        const btnNative = document.getElementById('btn-native-video');
+                        if (btnNative) {
+                            btnNative.onclick = () => OpenNative(file.path);
+                        }
+                    }, 0);
+                    break;
+                case 'pdf':
+                    previewContentEl.innerHTML = `<embed src="${mediaUrl}" type="application/pdf" class="preview-pdf" style="width: 100%; height: 100%; border: none;"></embed>`;
+                    break;
+            }
+        }).catch(err => {
+            if (selectedIndex !== -1 && files[selectedIndex].path !== file.path) return;
+            previewContentEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><p>Failed to load media</p><p style="font-size:0.75rem; color:var(--danger)">${err}</p></div>`;
+        });
+        return;
+    }
 
     switch (file.previewType) {
-        case 'image':
-            previewContentEl.innerHTML = `<img src="${localUrl}" class="preview-img">`;
-            break;
-        case 'video':
-            previewContentEl.innerHTML = `
-                <div class="preview-video-container">
-                    <video src="${localUrl}" class="preview-video" controls autoplay loop muted></video>
-                    <button id="btn-native-video" class="btn-native-player">Open in System Player</button>
-                </div>
-            `;
-            setTimeout(() => {
-                const btnNative = document.getElementById('btn-native-video');
-                if (btnNative) {
-                    btnNative.onclick = () => OpenNative(file.path);
-                }
-            }, 0);
-            break;
-        case 'pdf':
-            previewContentEl.innerHTML = `<iframe src="${localUrl}" class="preview-pdf"></iframe>`;
-            break;
         case 'text':
         case 'document':
             previewContentEl.innerHTML = `<div class="empty-state"><p>Loading document text...</p></div>`;
@@ -712,7 +856,7 @@ async function renderPreview() {
 async function handleAction() {
     if (files.length === 0) return;
     const file = files[selectedIndex];
-    
+
     if (file.isDir || file.name === '../') {
         searchBar.value = '';
         await loadDirectory(file.path);
@@ -724,7 +868,7 @@ async function handleAction() {
 async function handleMove(targetKey: string) {
     const targetDir = quickTargets[targetKey];
     if (!targetDir) return;
-    
+
     if (files.length === 0) return;
     const file = files[selectedIndex];
     if (file.name === '../') return;
@@ -849,6 +993,20 @@ function setupKeyboardListeners() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function waitForWails(): Promise<void> {
+    return new Promise((resolve) => {
+        const check = () => {
+            if ((window as any).go && (window as any).go.gui) {
+                resolve();
+            } else {
+                setTimeout(check, 50);
+            }
+        };
+        check();
+    });
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await waitForWails();
     init();
 });

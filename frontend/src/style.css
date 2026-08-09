@@ -185,14 +185,23 @@ body {
   align-items: center;
   border-radius: var(--radius-sm);
   transition: background 0.1s;
+  flex-shrink: 0;
 }
 
 .file-item:hover {
   background: var(--bg-hover);
 }
 
-.file-item.selected {
+.file-item.selected:not(.active-preview) {
   background: var(--bg-active);
+  opacity: 0.6;
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.file-item.active-preview {
+  background: rgba(10, 132, 255, 0.15);
+  border-left: 3px solid var(--accent);
 }
 
 .file-info {
@@ -593,3 +602,151 @@ body {
   }
 }
 
+.btn-scan-premium {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a84ff, #005bb5);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.btn-scan-premium:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(10, 132, 255, 0.3);
+}
+.btn-scan-premium:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dupes Card UI */
+.dupes-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dupe-group-card {
+    background: var(--bg-hover);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+.dupe-group-card.active-card {
+    border-color: #0a84ff;
+    box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.2);
+}
+
+.dupe-group-header {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.targeted-for-trash {
+    opacity: 0.4;
+    text-decoration: line-through;
+    color: #ff453a !important;
+}
+
+.targeted-for-trash .file-meta-small {
+    text-decoration: line-through;
+    color: #ff453a !important;
+    opacity: 0.7;
+}
+
+.preview-error-fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+}
+
+.preview-error-fallback svg {
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+/* Duplicate Cards */
+.dupe-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
+}
+
+.dupe-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.dupe-group-header {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Primary Scan Button */
+.primary-scan-btn {
+  background: var(--accent, #0a84ff);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  font-weight: 500;
+  transition: transform 0.1s;
+}
+
+.primary-scan-btn:active {
+  transform: scale(0.97);
+}
+
+/* Segmented Control (Auto-Select Toggle) */
+.segmented-control {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segment-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.segment-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.segment-btn.active {
+  background: var(--accent);
+  color: white;
+}

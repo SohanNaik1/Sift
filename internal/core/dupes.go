@@ -115,6 +115,16 @@ func FindDuplicates(dirs []string) ([]DuplicateGroup, error) {
 			mu.Lock()
 			for h, group := range hashMap {
 				if len(group) > 1 {
+					// Sort files within the group by oldest ModTime first
+					sort.Slice(group, func(i, j int) bool {
+						infoI, errI := os.Stat(group[i])
+						infoJ, errJ := os.Stat(group[j])
+						if errI == nil && errJ == nil {
+							return infoI.ModTime().Before(infoJ.ModTime())
+						}
+						return group[i] < group[j] // fallback
+					})
+					
 					// Get size for this group
 					info, err := os.Stat(group[0])
 					size := int64(0)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -21,7 +22,8 @@ import (
 )
 
 type Controller struct {
-	ctx context.Context
+	ctx            context.Context
+	mediaServerURL string
 }
 
 func NewController() *Controller {
@@ -31,6 +33,45 @@ func NewController() *Controller {
 // Startup is called when the app starts
 func (c *Controller) Startup(ctx context.Context) {
 	c.ctx = ctx
+	
+	// Start lightweight local streaming server on an ephemeral port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err == nil {
+		c.mediaServerURL = fmt.Sprintf("http://127.0.0.1:%d", listener.Addr().(*net.TCPAddr).Port)
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/video-preview", func(w http.ResponseWriter, r *http.Request) {
+				// We MUST allow CORS because the frontend is served on a different origin (localhost:5173 or wails://)
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+				
+				if r.Method == "OPTIONS" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+
+				filePath := r.URL.Query().Get("path")
+				if filePath == "" {
+					http.Error(w, "Missing path", http.StatusBadRequest)
+					return
+				}
+
+				// Basic validation
+				if _, err := os.Stat(filePath); os.IsNotExist(err) {
+					http.Error(w, "File not found", http.StatusNotFound)
+					return
+				}
+
+				http.ServeFile(w, r, filePath)
+			})
+			http.Serve(listener, mux)
+		}()
+	}
+}
+
+// GetMediaServerURL returns the dynamically bound media streaming URL.
+func (c *Controller) GetMediaServerURL() string {
+	return c.mediaServerURL
 }
 
 func (c *Controller) Quit() {
@@ -178,7 +219,7 @@ func (c *Controller) GetFilePreview(path string) PreviewData {
 		return PreviewData{Text: readTextSnippet(path)}
 	}
 
-	return PreviewData{Text: "No text preview available."}
+	return PreviewData{Text: "Preview not available"}
 }
 
 func readTextSnippet(path string) string {
@@ -299,6 +340,25 @@ func (c *Controller) TrashFile(path string) error {
 
 	dest := filepath.Join(trashDir, fmt.Sprintf("%d_%s", time.Now().Unix(), filepath.Base(path)))
 	return core.MoveFile(path, dest)
+}
+
+func (c *Controller) EmptyTrash() error {
+	trashDir := c.GetTrashPath()
+	entries, err := os.ReadDir(trashDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	
+	for _, entry := range entries {
+		err := os.RemoveAll(filepath.Join(trashDir, entry.Name()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Controller) MoveFile(src, destDir string) error {
