@@ -50,6 +50,7 @@ echo "[Success] Build complete!"
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 cp build/bin/sift "$BIN_DIR/sift"
+cp build/bin/sift ./sift
 
 echo ""
 echo "=========================================================="

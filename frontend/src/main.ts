@@ -2,8 +2,7 @@ import './style.css';
 import * as Sentry from '@sentry/browser';
 // @ts-ignore
 import { ListFiles, GetQuickTargets, TrashFile, MoveFile, GetFilePreview, Quit, PickDirectory, OpenNative, GetTrashPath, PinTarget, CheckForUpdates, FindDuplicates, GetMediaServerURL, EmptyTrash } from '../wailsjs/go/gui/Controller';
-// @ts-ignore
-import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { getFileIcon } from './icons';
 
 interface FileEntry {
     name: string;
@@ -22,8 +21,16 @@ let currentPath = '~';
 let allFiles: FileEntry[] = [];
 let files: FileEntry[] = [];
 let selectedIndex = 0;
+let isTriageMultiSelectMode = false;
+let triageSelectedIndices = new Set<number>();
+let isDragging = false;
+let dragTargetValue = true;
+let triageHistory: string[] = [];
+let triageHistoryIndex: number = -1;
 let quickTargets: Record<string, string> = {};
 let previewDebounceTimer: number | null = null;
+let isPreviewMinimized = false;
+let isXRayMode = false;
 
 const fileListEl = document.getElementById('file-list') as HTMLUListElement;
 const currentPathEl = document.getElementById('current-path') as HTMLDivElement;
@@ -37,8 +44,12 @@ const btnTrash = document.getElementById('btn-trash') as HTMLButtonElement;
 const btnTrashPortal = document.getElementById('btn-trash-portal') as HTMLButtonElement;
 const btnTrashPortalDupes = document.getElementById('btn-trash-portal-dupes') as HTMLButtonElement;
 const btnEmptyTrash = document.getElementById('btn-empty-trash') as HTMLButtonElement;
+const btnTriageMultiselect = document.getElementById('btn-triage-multiselect') as HTMLButtonElement;
+const btnTriageSelectAll = document.getElementById('btn-triage-select-all') as HTMLButtonElement;
+const btnHistoryBack = document.getElementById('btn-history-back') as HTMLButtonElement;
+const btnHistoryForward = document.getElementById('btn-history-forward') as HTMLButtonElement;
 const btnHotkeys = document.getElementById('btn-hotkeys') as HTMLButtonElement;
-const btnHome = document.getElementById('btn-home') as HTMLButtonElement;
+const btnXray = document.getElementById('btn-xray') as HTMLButtonElement;
 const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
 const mouseTargets = document.getElementById('quick-targets-modal-group') as HTMLDivElement;
 const modal = document.getElementById('hotkey-modal') as HTMLDivElement;
@@ -160,10 +171,44 @@ function setupMouseControls() {
             }
         }
     };
-    btnHome.onclick = async () => {
-        searchBar.value = '';
-        await loadDirectory('~');
+    btnTriageMultiselect.onclick = () => {
+        isTriageMultiSelectMode = !isTriageMultiSelectMode;
+        if (!isTriageMultiSelectMode) {
+            triageSelectedIndices.clear();
+            btnTriageSelectAll.style.display = 'none';
+            btnTriageMultiselect.classList.remove('active');
+        } else {
+            btnTriageSelectAll.style.display = 'inline-block';
+            btnTriageMultiselect.classList.add('active');
+        }
+        renderFileList();
+        updateSelection(true);
     };
+    btnTriageSelectAll.onclick = () => {
+        if (triageSelectedIndices.size === files.length) {
+            triageSelectedIndices.clear();
+        } else {
+            files.forEach((_, i) => triageSelectedIndices.add(i));
+        }
+        renderFileList();
+        updateSelection(true);
+    };
+    
+    btnHistoryBack.onclick = () => {
+        if (triageHistoryIndex > 0) {
+            triageHistoryIndex--;
+            loadDirectory(triageHistory[triageHistoryIndex], false, true);
+        }
+    };
+
+    btnHistoryForward.onclick = () => {
+        if (triageHistoryIndex < triageHistory.length - 1) {
+            triageHistoryIndex++;
+            loadDirectory(triageHistory[triageHistoryIndex], false, true);
+        }
+    };
+
+
     btnHotkeys.onclick = () => {
         const triageHotkeys = document.getElementById('hotkeys-triage');
         const dupesHotkeys = document.getElementById('hotkeys-dupes');
@@ -215,6 +260,43 @@ function setupRouting() {
     tabTriage.onclick = () => switchTab('triage');
     tabStaging.onclick = () => switchTab('staging');
     tabDupes.onclick = () => switchTab('dupes');
+
+    // Setup Maximize/Minimize Toggle
+    const btnTogglePreview = document.getElementById('btn-toggle-preview') as HTMLButtonElement;
+    const iconPreviewToggle = document.getElementById('icon-preview-toggle') as unknown as SVGElement;
+    
+    if (btnTogglePreview) {
+        btnTogglePreview.onclick = () => {
+            isPreviewMinimized = !isPreviewMinimized;
+            if (!isPreviewMinimized) isXRayMode = false;
+
+            if (isPreviewMinimized) {
+                pageTriage.classList.add('preview-minimized');
+                // Maximize Icon (corners pointing out)
+                iconPreviewToggle.innerHTML = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>`;
+                btnTogglePreview.title = "Maximize Preview";
+            } else {
+                pageTriage.classList.remove('preview-minimized');
+                // Minimize Icon (corners pointing in)
+                iconPreviewToggle.innerHTML = `<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>`;
+                btnTogglePreview.title = "Minimize Preview";
+            }
+            renderMiddlePane();
+        };
+    }
+
+    if (btnXray) {
+        btnXray.onclick = () => {
+            isXRayMode = true;
+            if (!isPreviewMinimized) {
+                isPreviewMinimized = true;
+                pageTriage.classList.add('preview-minimized');
+                iconPreviewToggle.innerHTML = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>`;
+                btnTogglePreview.title = "Maximize Preview";
+            }
+            renderMiddlePane();
+        };
+    }
 
     // Make switchTab available globally for hotkeys
     (window as any).switchTab = switchTab;
@@ -344,7 +426,12 @@ function setupDupes() {
             li.className = 'file-item';
             li.innerHTML = `
                 <div class="file-info">
-                    <div class="file-name"><span class="badge badge-dir">DIR</span> <span>${dir}</span></div>
+                    <div class="file-name">
+                        <span class="file-icon" style="display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; color: inherit; margin-right: 8px;">
+                            ${getFileIcon(true, '', 'folder')}
+                        </span> 
+                        <span>${dir}</span>
+                    </div>
                 </div>
                 <button class="action-btn danger" style="padding: 2px 6px;">&times;</button>
             `;
@@ -458,9 +545,16 @@ function renderDupeResults() {
             li.className = 'file-item';
             li.id = `dupe-item-${globalIndex}`;
             li.setAttribute('data-group-index', groupIndex.toString());
+            const filename = file.split(/[\/\\]/).pop() || '';
+            const ext = '.' + (filename.split('.').pop() || '');
             li.innerHTML = `
                 <div class="file-info">
-                    <div class="file-name"><span>${file.split('/').pop() || file.split('\\').pop()}</span></div>
+                    <div class="file-name">
+                        <span class="file-icon" style="display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; color: inherit; margin-right: 8px;">
+                            ${getFileIcon(false, ext, '')}
+                        </span>
+                        <span>${filename}</span>
+                    </div>
                     <span class="file-meta-small">${file}</span>
                 </div>
             `;
@@ -607,22 +701,85 @@ function setupSearch() {
     });
 }
 
-async function loadDirectory(path: string, preserveIndex: boolean = false) {
+function updateHistoryButtons() {
+    btnHistoryBack.disabled = triageHistoryIndex <= 0;
+    btnHistoryForward.disabled = triageHistoryIndex >= triageHistory.length - 1;
+}
+
+function renderBreadcrumbs(path: string) {
+    const parts = path.split(/[\/\\]/).filter(p => p);
+    currentPathEl.innerHTML = '';
+    currentPathEl.style.overflowX = 'auto';
+    currentPathEl.style.flexWrap = 'nowrap';
+    
+    const elements: HTMLElement[] = [];
+    let currentAccPath = '';
+
+    if (path.startsWith('/')) {
+        currentAccPath = '/';
+        const rootEl = document.createElement('span');
+        rootEl.className = 'breadcrumb-item';
+        rootEl.textContent = '/';
+        rootEl.onclick = () => loadDirectory('/');
+        elements.push(rootEl);
+    } else if (path.match(/^[a-zA-Z]:/)) {
+        currentAccPath = parts[0] + '\\';
+        const rootEl = document.createElement('span');
+        rootEl.className = 'breadcrumb-item';
+        rootEl.textContent = parts[0];
+        rootEl.onclick = () => loadDirectory(currentAccPath);
+        elements.push(rootEl);
+        parts.shift();
+    }
+
+    parts.forEach((part, i) => {
+        if (i > 0 || elements.length > 0) {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb-separator';
+            sep.textContent = '>';
+            elements.push(sep);
+        }
+        
+        currentAccPath += (currentAccPath.endsWith('/') || currentAccPath.endsWith('\\') || currentAccPath === '' ? '' : (path.match(/^[a-zA-Z]:/) ? '\\' : '/')) + part;
+        const p = currentAccPath; // closure
+        
+        const span = document.createElement('span');
+        span.className = 'breadcrumb-item';
+        span.textContent = part;
+        span.onclick = () => loadDirectory(p);
+        elements.push(span);
+    });
+
+    elements.forEach(el => currentPathEl.appendChild(el));
+}
+
+async function loadDirectory(path: string, preserveIndex: boolean = false, skipHistory: boolean = false) {
     try {
         const oldIndex = selectedIndex;
-        allFiles = await ListFiles(path);
+        let rawFiles = await ListFiles(path);
+        
+        // Ensure path resolves fully
+        if (rawFiles.length > 0) {
+            currentPath = path;
+            if (rawFiles[0].name === '../' && rawFiles.length > 1) {
+                currentPath = rawFiles[1].path.substring(0, rawFiles[1].path.lastIndexOf('/'));
+            } else if (rawFiles.length > 0 && rawFiles[0].name !== '../') {
+                currentPath = rawFiles[0].path.substring(0, rawFiles[0].path.lastIndexOf('/'));
+            }
+        } else {
+            currentPath = path;
+        }
+
+        allFiles = rawFiles.filter(f => f.name !== '../');
         files = [...allFiles];
 
-        if (allFiles.length > 0) {
-            if (allFiles[0].name === '../' && allFiles.length > 1) {
-                currentPath = allFiles[1].path.substring(0, allFiles[1].path.lastIndexOf('/'));
-            } else if (allFiles.length > 0 && allFiles[0].name !== '../') {
-                currentPath = allFiles[0].path.substring(0, allFiles[0].path.lastIndexOf('/'));
-            } else {
-                currentPath = path;
-            }
-            currentPathEl.textContent = currentPath;
+        if (!skipHistory) {
+            triageHistory.splice(triageHistoryIndex + 1);
+            triageHistory.push(currentPath);
+            triageHistoryIndex = triageHistory.length - 1;
         }
+        updateHistoryButtons();
+        renderBreadcrumbs(currentPath);
 
         if (preserveIndex && searchBar.value === '') {
             selectedIndex = Math.min(oldIndex, Math.max(0, files.length - 1));
@@ -652,77 +809,123 @@ function renderFileList() {
         li.className = `file-item`;
         li.id = `item-${index}`;
 
-        if (file.name === '../') {
-            li.innerHTML = `
-                <div class="file-info">
-                    <div class="file-name">
-                        <span class="badge badge-dir">&larr;</span>
-                        <span style="font-weight: 600; color: var(--accent);">Parent Directory</span>
-                    </div>
-                    <span class="file-meta-small">Go Back</span>
-                </div>
-            `;
-        } else {
-            let badgeClass = 'badge-none';
-            let badgeText = '---';
-            if (file.isDir) { badgeClass = 'badge-dir'; badgeText = 'DIR'; }
-            else if (file.previewType === 'image') { badgeClass = 'badge-img'; badgeText = 'IMG'; }
-            else if (file.previewType === 'video') { badgeClass = 'badge-vid'; badgeText = 'VID'; }
-            else if (file.previewType === 'pdf') { badgeClass = 'badge-doc'; badgeText = 'PDF'; }
-            else if (file.previewType === 'text') { badgeClass = 'badge-txt'; badgeText = 'TXT'; }
-            else if (file.previewType === 'document') { badgeClass = 'badge-doc'; badgeText = 'DOC'; }
+        const svgIcon = getFileIcon(file.isDir, file.ext, file.previewType);
 
-            const isPinned = Object.values(quickTargets).includes(file.path);
-            let pinBtn = '';
-            if (file.isDir) {
-                const pinnedClass = isPinned ? 'pinned' : '';
-                pinBtn = `<button class="action-btn pin-btn ${pinnedClass}" title="Toggle Pin to Quick Targets">${isPinned ? 'Pinned' : 'Pin'}</button>`;
-            }
-
-            li.innerHTML = `
-                <div class="file-info" style="flex: 1;">
-                    <div class="file-name">
-                        <span class="badge ${badgeClass}">${badgeText}</span>
-                        <span>${file.name}</span>
-                    </div>
-                    <span class="file-meta-small">${file.isDir ? 'Folder' : file.sizeMB.toFixed(2) + ' MB'} | ${file.modTime}</span>
-                </div>
-                ${pinBtn}
-            `;
-
-            const btnEl = li.querySelector('.pin-btn') as HTMLButtonElement;
-            if (btnEl) {
-                btnEl.onclick = async (e) => {
-                    e.stopPropagation();
-                    quickTargets = await PinTarget(file.path);
-                    renderQuickTargets();
-                    renderFileList(); // Re-render to update pin state visually
-                    updateSelection(true);
-                };
-            }
+        const isPinned = Object.values(quickTargets).includes(file.path);
+        let pinBtn = '';
+        if (file.isDir) {
+            const pinnedClass = isPinned ? 'pinned' : '';
+            pinBtn = `<button class="action-btn pin-btn ${pinnedClass}" title="Toggle Pin to Quick Targets">${isPinned ? 'Pinned' : 'Pin'}</button>`;
         }
 
-        li.onclick = () => {
+        let checkboxHtml = '';
+        if (isTriageMultiSelectMode) {
+            const isChecked = triageSelectedIndices.has(index) ? 'checked' : '';
+            checkboxHtml = `<input type="checkbox" class="triage-checkbox" ${isChecked} tabindex="-1">`;
+        }
+
+        li.innerHTML = `
+            ${checkboxHtml}
+            <div class="file-info" style="flex: 1;">
+                <div style="display: flex; align-items: center;">
+                    <span class="file-icon" style="display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; color: inherit; margin-right: 8px;">
+                        ${svgIcon}
+                    </span>
+                    <div style="display: flex; flex-direction: column; justify-content: center;">
+                        <span style="font-weight: 500;">${file.name}</span>
+                        <span class="file-meta-small">${file.isDir ? 'Folder' : file.sizeMB.toFixed(2) + ' MB'} | ${file.modTime}</span>
+                    </div>
+                </div>
+            </div>
+            ${pinBtn}
+        `;
+
+        const btnEl = li.querySelector('.pin-btn') as HTMLButtonElement;
+        if (btnEl) {
+            btnEl.onmousedown = (e) => e.stopPropagation();
+            btnEl.onclick = async (e) => {
+                e.stopPropagation();
+                quickTargets = await PinTarget(file.path);
+                renderQuickTargets();
+                renderFileList();
+                updateSelection(true);
+            };
+        }
+
+        li.onmousedown = (e) => {
+            if (e.button !== 0) return; // Only left click
+            if (isTriageMultiSelectMode) {
+                isDragging = true;
+                if (triageSelectedIndices.has(index)) {
+                    triageSelectedIndices.delete(index);
+                    dragTargetValue = false;
+                } else {
+                    triageSelectedIndices.add(index);
+                    dragTargetValue = true;
+                }
+            }
             selectedIndex = index;
             updateSelection(true);
         };
+        
+        li.onmouseenter = () => {
+            if (isTriageMultiSelectMode && isDragging) {
+                if (dragTargetValue) {
+                    triageSelectedIndices.add(index);
+                } else {
+                    triageSelectedIndices.delete(index);
+                }
+                const cb = li.querySelector('.triage-checkbox') as HTMLInputElement;
+                if (cb) cb.checked = dragTargetValue;
+                updateSelection(false);
+            }
+        };
+
         li.ondblclick = () => handleAction();
         fileListEl.appendChild(li);
     });
 }
 
 function updateSelection(loadPreview: boolean = false) {
-    const oldSelected = fileListEl.querySelector('.selected');
-    if (oldSelected) {
-        oldSelected.classList.remove('selected');
-        oldSelected.classList.remove('active-preview');
+    // Clear old visual selection styles
+    const oldSelected = fileListEl.querySelectorAll('.selected, .active-preview, .multi-selected');
+    oldSelected.forEach(el => {
+        el.classList.remove('selected', 'active-preview', 'multi-selected');
+    });
+
+    if (isTriageMultiSelectMode) {
+        triageSelectedIndices.forEach(idx => {
+            const el = document.getElementById(`item-${idx}`);
+            if (el) {
+                el.classList.add('multi-selected');
+                const cb = el.querySelector('.triage-checkbox') as HTMLInputElement;
+                if (cb) cb.checked = true;
+            }
+        });
     }
 
     const newSelected = document.getElementById(`item-${selectedIndex}`);
     if (newSelected) {
-        newSelected.classList.add('selected');
+        if (!isTriageMultiSelectMode) {
+            newSelected.classList.add('selected');
+        }
         newSelected.classList.add('active-preview');
         newSelected.scrollIntoView({ block: 'nearest' });
+    }
+
+    if (files[selectedIndex]) {
+        const isDir = files[selectedIndex].isDir;
+        if (isDir) {
+            btnXray.style.opacity = '1';
+            btnXray.style.pointerEvents = 'auto';
+        } else {
+            btnXray.style.opacity = '0.5';
+            btnXray.style.pointerEvents = 'none';
+        }
+    }
+
+    if (isPreviewMinimized) {
+        renderMiddlePane();
     }
 
     if (loadPreview) {
@@ -732,6 +935,66 @@ function updateSelection(loadPreview: boolean = false) {
         previewDebounceTimer = window.setTimeout(async () => {
             await renderPreview();
         }, 150);
+    }
+}
+
+async function renderMiddlePane() {
+    const middlePane = document.getElementById('middle-pane') as HTMLDivElement;
+    if (!middlePane || !isPreviewMinimized) return;
+
+    if (selectedIndex < 0 || selectedIndex >= files.length) {
+        middlePane.innerHTML = `<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius-card); margin: 2px;">Select a folder to view contents</div>`;
+        return;
+    }
+
+    const item = files[selectedIndex];
+    if (!item.isDir) {
+        middlePane.innerHTML = `<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius-card); margin: 2px;">Item is not a folder</div>`;
+        return;
+    }
+
+    if (isXRayMode) {
+        middlePane.innerHTML = `<div style="display: flex; flex-direction: column; height: 100%; align-items: center; justify-content: center; gap: 12px; color: var(--warning); border: 1px dashed var(--border); border-radius: var(--radius-card); margin: 2px;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <div>Running X-Ray Engine on ${item.name}...</div>
+        </div>`;
+    } else {
+        middlePane.innerHTML = `<div style="padding: 16px; color: var(--text-secondary); text-align: center;">Loading folder contents...</div>`;
+        try {
+            const rawFiles = await ListFiles(item.path);
+            const folderFiles = rawFiles.filter(f => f.name !== '../');
+            
+            if (folderFiles.length === 0) {
+                middlePane.innerHTML = `<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius-card); margin: 2px;">Folder is empty</div>`;
+                return;
+            }
+
+            let html = `<ul class="file-list" style="flex: 1; width: 100%; overflow-y: auto; height: 100%; border: 1px solid var(--border); border-radius: var(--radius-card); margin: 2px; background: var(--bg-card);">`;
+            folderFiles.forEach(f => {
+                const icon = getFileIcon(f.isDir, f.ext, f.previewType);
+                html += `
+                    <li class="file-item">
+                        <div class="file-info" style="flex: 1;">
+                            <div style="display: flex; align-items: center;">
+                                <span class="file-icon" style="display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; color: inherit; margin-right: 8px;">
+                                    ${icon}
+                                </span>
+                                <div style="display: flex; flex-direction: column; justify-content: center;">
+                                    <span style="font-weight: 500;">${f.name}</span>
+                                    <span class="file-meta-small">${f.isDir ? 'Folder' : f.sizeMB.toFixed(2) + ' MB'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                `;
+            });
+            html += `</ul>`;
+            middlePane.innerHTML = html;
+        } catch (e) {
+            middlePane.innerHTML = `<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--danger); font-size: 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius-card); margin: 2px;">Failed to load directory</div>`;
+        }
     }
 }
 
@@ -853,52 +1116,94 @@ async function renderPreview() {
     }
 }
 
+function exitMultiSelectMode() {
+    if (!isTriageMultiSelectMode) return;
+    isTriageMultiSelectMode = false;
+    triageSelectedIndices.clear();
+    btnTriageSelectAll.style.display = 'none';
+    btnTriageMultiselect.classList.remove('active');
+}
+
 async function handleAction() {
     if (files.length === 0) return;
-    const file = files[selectedIndex];
+    
+    let targetIndices = [selectedIndex];
+    if (isTriageMultiSelectMode && triageSelectedIndices.size > 0) {
+        targetIndices = Array.from(triageSelectedIndices);
+    }
 
-    if (file.isDir || file.name === '../') {
-        searchBar.value = '';
-        await loadDirectory(file.path);
-    } else {
-        await OpenNative(file.path);
+    if (isTriageMultiSelectMode && targetIndices.some(idx => files[idx].isDir)) {
+        // Block navigating into a directory when in multi-select mode
+        return;
+    }
+
+    for (const idx of targetIndices) {
+        const file = files[idx];
+        if (file.isDir) {
+            if (targetIndices.length === 1) {
+                searchBar.value = '';
+                await loadDirectory(file.path);
+            }
+        } else {
+            await OpenNative(file.path);
+        }
+    }
+    
+    if (targetIndices.length > 1) {
+        exitMultiSelectMode();
+        renderFileList();
+        updateSelection(true);
     }
 }
 
 async function handleMove(targetKey: string) {
     const targetDir = quickTargets[targetKey];
     if (!targetDir) return;
-
     if (files.length === 0) return;
-    const file = files[selectedIndex];
-    if (file.name === '../') return;
 
-    const el = document.getElementById(`item-${selectedIndex}`);
-    if (el) {
-        el.classList.add('slide-out');
-        await new Promise(r => setTimeout(r, 150));
+    let targetIndices = [selectedIndex];
+    if (isTriageMultiSelectMode && triageSelectedIndices.size > 0) {
+        targetIndices = Array.from(triageSelectedIndices);
     }
+    targetIndices = targetIndices.filter(i => files[i].name !== '../');
+    if (targetIndices.length === 0) return;
 
-    await MoveFile(file.path, targetDir);
+    targetIndices.forEach(idx => {
+        const el = document.getElementById(`item-${idx}`);
+        if (el) el.classList.add('slide-out');
+    });
+    
+    await new Promise(r => setTimeout(r, 150));
+    await Promise.all(targetIndices.map(idx => MoveFile(files[idx].path, targetDir)));
+    
+    exitMultiSelectMode();
     await loadDirectory(currentPath, true);
 }
 
 async function handleTrash() {
     if (files.length === 0) return;
-    const file = files[selectedIndex];
-    if (file.name === '../') return;
 
-    const el = document.getElementById(`item-${selectedIndex}`);
-    if (el) {
-        el.classList.add('slide-out');
-        await new Promise(r => setTimeout(r, 150));
+    let targetIndices = [selectedIndex];
+    if (isTriageMultiSelectMode && triageSelectedIndices.size > 0) {
+        targetIndices = Array.from(triageSelectedIndices);
     }
+    targetIndices = targetIndices.filter(i => files[i].name !== '../');
+    if (targetIndices.length === 0) return;
 
-    await TrashFile(file.path);
+    targetIndices.forEach(idx => {
+        const el = document.getElementById(`item-${idx}`);
+        if (el) el.classList.add('slide-out');
+    });
+    
+    await new Promise(r => setTimeout(r, 150));
+    await Promise.all(targetIndices.map(idx => TrashFile(files[idx].path)));
+    
+    exitMultiSelectMode();
     await loadDirectory(currentPath, true);
 }
 
 function setupKeyboardListeners() {
+    window.addEventListener('mouseup', () => { isDragging = false; });
     window.addEventListener('keydown', async (e) => {
         // Global Hotkeys for Tabs
         if (e.altKey) {
@@ -926,7 +1231,7 @@ function setupKeyboardListeners() {
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                if (document.getElementById('page-dupes')?.style.display === 'flex') {
+                if (document.getElementById('page-dupes')?.classList.contains('active')) {
                     // Dupes page navigation
                     let totalItems = 0;
                     dupeResults.forEach(g => totalItems += g.files.length);
@@ -935,7 +1240,7 @@ function setupKeyboardListeners() {
                         selectedDupeIndices = new Set([lastSelectedDupeIndex]);
                         updateDupeSelection();
                     }
-                } else if (document.getElementById('page-triage')?.style.display === 'flex') {
+                } else if (document.getElementById('page-triage')?.classList.contains('active')) {
                     if (selectedIndex < files.length - 1) {
                         selectedIndex++;
                         updateSelection(true);
@@ -944,13 +1249,13 @@ function setupKeyboardListeners() {
                 break;
             case 'ArrowUp':
                 e.preventDefault();
-                if (document.getElementById('page-dupes')?.style.display === 'flex') {
+                if (document.getElementById('page-dupes')?.classList.contains('active')) {
                     if (lastSelectedDupeIndex > 0) {
                         lastSelectedDupeIndex--;
                         selectedDupeIndices = new Set([lastSelectedDupeIndex]);
                         updateDupeSelection();
                     }
-                } else if (document.getElementById('page-triage')?.style.display === 'flex') {
+                } else if (document.getElementById('page-triage')?.classList.contains('active')) {
                     if (selectedIndex > 0) {
                         selectedIndex--;
                         updateSelection(true);
@@ -959,20 +1264,20 @@ function setupKeyboardListeners() {
                 break;
             case 'Enter':
                 e.preventDefault();
-                if (document.getElementById('page-dupes')?.style.display === 'flex') {
+                if (document.getElementById('page-dupes')?.classList.contains('active')) {
                     const item = getSelectedDupeItem();
                     if (item) await OpenNative(item);
-                } else if (document.getElementById('page-triage')?.style.display === 'flex') {
+                } else if (document.getElementById('page-triage')?.classList.contains('active')) {
                     await handleAction();
                 }
                 break;
             case 'r':
             case 'R':
                 e.preventDefault();
-                if (document.getElementById('page-dupes')?.style.display === 'flex') {
+                if (document.getElementById('page-dupes')?.classList.contains('active')) {
                     const btnDupeTrash = document.getElementById('btn-dupe-trash');
                     if (btnDupeTrash) btnDupeTrash.click();
-                } else if (document.getElementById('page-triage')?.style.display === 'flex') {
+                } else if (document.getElementById('page-triage')?.classList.contains('active')) {
                     await handleTrash();
                 }
                 break;

@@ -15,6 +15,7 @@
     "esbuild@0.28.1": true
   },
   "dependencies": {
-    "@sentry/browser": "^10.69.0"
+    "@sentry/browser": "^10.69.0",
+    "@tanstack/virtual-core": "^3.17.7"
   }
 }

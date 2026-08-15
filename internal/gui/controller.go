@@ -404,3 +404,57 @@ func (c *Controller) OpenNative(path string) error {
 func (c *Controller) FindDuplicates(dirs []string) ([]core.DuplicateGroup, error) {
 	return core.FindDuplicates(dirs)
 }
+
+type FlatFile struct {
+	Name         string  `json:"name"`
+	Extension    string  `json:"extension"`
+	SizeMB       float64 `json:"sizeMB"`
+	AbsolutePath string  `json:"absolutePath"`
+	RelativePath string  `json:"relativePath"`
+	LastModified string  `json:"lastModified"`
+}
+
+func (c *Controller) GetXRayFiles(targetPath string) []FlatFile {
+	var results []FlatFile
+	count := 0
+	maxFiles := 15000
+
+	filepath.WalkDir(targetPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // ignore errors
+		}
+		if d.IsDir() {
+			return nil // skip processing for directories themselves
+		}
+		
+		if count >= maxFiles {
+			return filepath.SkipDir // hard cap
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		rel, err := filepath.Rel(targetPath, path)
+		if err != nil {
+			rel = path
+		}
+
+		sizeMB := float64(info.Size()) / (1024 * 1024)
+		
+		results = append(results, FlatFile{
+			Name:         d.Name(),
+			Extension:    filepath.Ext(d.Name()),
+			SizeMB:       sizeMB,
+			AbsolutePath: path,
+			RelativePath: rel,
+			LastModified: info.ModTime().Format("2006-01-02 15:04:05"),
+		})
+		
+		count++
+		return nil
+	})
+
+	return results
+}

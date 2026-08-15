@@ -30,6 +30,10 @@ export function GetTrashPath() {
   return window['go']['gui']['Controller']['GetTrashPath']();
 }
 
+export function GetXRayFiles(arg1) {
+  return window['go']['gui']['Controller']['GetXRayFiles'](arg1);
+}
+
 export function ListFiles(arg1) {
   return window['go']['gui']['Controller']['ListFiles'](arg1);
 }

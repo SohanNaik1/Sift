@@ -51,6 +51,28 @@ export namespace gui {
 	        this.isHidden = source["isHidden"];
 	    }
 	}
+	export class FlatFile {
+	    name: string;
+	    extension: string;
+	    sizeMB: number;
+	    absolutePath: string;
+	    relativePath: string;
+	    lastModified: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FlatFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.extension = source["extension"];
+	        this.sizeMB = source["sizeMB"];
+	        this.absolutePath = source["absolutePath"];
+	        this.relativePath = source["relativePath"];
+	        this.lastModified = source["lastModified"];
+	    }
+	}
 	export class PreviewData {
 	    text: string;
 	

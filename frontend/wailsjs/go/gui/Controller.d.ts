@@ -18,6 +18,8 @@ export function GetQuickTargets():Promise<Record<string, string>>;
 
 export function GetTrashPath():Promise<string>;
 
+export function GetXRayFiles(arg1:string):Promise<Array<gui.FlatFile>>;
+
 export function ListFiles(arg1:string):Promise<Array<gui.FileEntry>>;
 
 export function MoveFile(arg1:string,arg2:string):Promise<void>;
